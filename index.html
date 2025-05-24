@@ -4,72 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OXO</title>
-  <style>
-    body {
-      background-color: black;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      font-family: sans-serif;
-      box-sizing: border-box;
-    }
-    .board {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      grid-template-rows: repeat(7, 1fr);
-      gap: 2px;
-      background-color: #2e4f2e;
-      padding: 4px;
-      border-radius: 8px;
-      width: 90vw;
-      max-width: 420px;
-      aspect-ratio: 1 / 1;
-    }
-    .cell {
-      width: 100%;
-      height: 100%;
-      background-color: #3b5f3b;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: min(8vw, 32px);
-      border-radius: 4px;
-      cursor: pointer;
-      position: relative;
-    }
-    .axis-cell {
-      background-color: #6a8f6a !important;
-    }
-    .white-piece {
-      color: white;
-    }
-    .black-piece {
-      color: black;
-    }
-    .hint {
-      width: 10px;
-      height: 10px;
-      background-color: rgba(0, 0, 0, 0.3);
-      border-radius: 50%;
-      position: absolute;
-    }
-    .game-button {
-      margin-top: 10px;
-      padding: 10px 20px;
-      background-color: #ffffff33;
-      color: white;
-      font-size: 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div style="font-size: 32px; margin-bottom: 12px;">OXO</div>
-  <div class="rules" style="max-width: 90vw; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
+  <div class="game-title">OXO</div>
+  <div class="rules">
     <strong>ルール:</strong><br>
     ・先手は黒、交互に2つずつコマを置きます。<br>
     ・1つ目のコマを置いた後、縦・横・斜めの軸に線対称となる位置に2つ目を置きます。<br>
@@ -78,207 +17,24 @@
     - 2×2の正方形<br>
     - 十字形（縦横 or 斜め）
   </div>
-  <div id="status">黒の番です</div>
-  <div style="display: grid; grid-template-columns: auto auto; align-items: stretch; height: 100%;">
-    <div style="display: grid; grid-template-rows: repeat(7, 1fr); font-size: 12px; color: #ccc; text-align: center; justify-items: end; align-items: center; height: 100%;">
-      <div style="transform: translateX(-4px);">7</div><div style="transform: translateX(-4px);">6</div><div style="transform: translateX(-4px);">5</div><div style="transform: translateX(-4px);">4</div><div style="transform: translateX(-4px);">3</div><div style="transform: translateX(-4px);">2</div><div style="transform: translateX(-4px);">1</div>
+  <div id="status" class="game-status">黒の番です</div>
+  <div class="game-container">
+    <div class="row-labels">
+      <div>7</div><div>6</div><div>5</div><div>4</div><div>3</div><div>2</div><div>1</div>
     </div>
     <div id="board" class="board"></div>
   </div>
-  <div style="display: grid; grid-template-columns: 20px repeat(7, 1fr); font-size: 12px; color: #ccc; text-align: center; justify-items: center; align-items: stretch; height: 100%; width: 90vw; max-width: 440px; margin-top: 4px;">
+  <div class="col-labels">
     <div></div>
-    <div style="transform: translateX(-8px);">a</div><div style="transform: translateX(-8px);">b</div><div style="transform: translateX(-8px);">c</div><div style="transform: translateX(-8px);">d</div><div style="transform: translateX(-8px);">e</div><div style="transform: translateX(-8px);">f</div><div style="transform: translateX(-8px);">g</div>
+    <div>a</div><div>b</div><div>c</div><div>d</div><div>e</div><div>f</div><div>g</div>
   </div>
-  <div id="record" style="margin-top: 12px; font-size: 14px;"></div>
-  <button class="game-button" onclick="undoMove()">待った</button>
-  <button class="game-button" onclick="resetGame()">リセット</button>
+  <div id="record" class="game-record"></div>
+  <div class="game-controls">
+    <button class="game-button" id="undo-button">待った</button>
+    <button class="game-button" id="reset-button">リセット</button>
+  </div>
 
-  <script>
-    const board = document.getElementById("board");
-    const status = document.getElementById("status");
-    const record = document.getElementById("record");
-    const cells = [];
-    let currentPlayer = "black";
-    let placedThisTurn = 0;
-    let firstPlacement = null;
-    let gameOver = false;
-    const moveHistory = [];
-
-    function beep(freq = 440, duration = 100) {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      gain.gain.value = 0.1;
-      osc.type = 'square';
-      osc.frequency.value = freq;
-      osc.start();
-      osc.stop(ctx.currentTime + duration / 1000);
-    }
-
-    function getCell(row, col) {
-      return cells[row * 7 + col];
-    }
-
-    function showHint(row, col) {
-      const cell = getCell(row, col);
-      if (!cell.textContent && !cell.querySelector(".hint")) {
-        const hint = document.createElement("div");
-        hint.className = "hint";
-        cell.appendChild(hint);
-      }
-    }
-
-    function clearHints() {
-      cells.forEach(cell => {
-        const hint = cell.querySelector(".hint");
-        if (hint) cell.removeChild(hint);
-      });
-    }
-
-    function placePiece(row, col, player) {
-      const cell = getCell(row, col);
-      if (!cell.textContent) {
-        cell.textContent = "●";
-        cell.classList.add(player === "black" ? "black-piece" : "white-piece");
-        beep(500, 80);
-        const colLabel = String.fromCharCode(97 + col);
-        const rowLabel = 7 - row;
-        record.textContent += `${player === "black" ? '黒' : '白'}: ${colLabel}${rowLabel} `;
-        moveHistory.push({ row, col });
-        return true;
-      }
-      return false;
-    }
-
-    function undoMove() {
-      if (gameOver || moveHistory.length === 0) return;
-      const stepsToUndo = (placedThisTurn === 1 || moveHistory.length === 1) ? 1 : 2;
-      for (let i = 0; i < stepsToUndo; i++) {
-        const last = moveHistory.pop();
-        const cell = getCell(last.row, last.col);
-        cell.textContent = "";
-        cell.classList.remove("black-piece", "white-piece");
-      }
-      let moves = record.textContent.trim().split(/\s+/);
-      if (moves.length >= stepsToUndo * 2) {
-        moves.splice(moves.length - stepsToUndo * 2, stepsToUndo * 2);
-      } else {
-        moves = [];
-      }
-      record.textContent = moves.join(" ") + (moves.length > 0 ? " " : "");
-      placedThisTurn = 0;
-      firstPlacement = null;
-      clearHints();
-      gameOver = false;
-      if (stepsToUndo === 2) {
-        currentPlayer = currentPlayer === "black" ? "white" : "black";
-      }
-      updateStatus();
-    }
-
-    function getSymPoint(row, col, axis) {
-      const c = 3;
-      const dx = row - c;
-      const dy = col - c;
-      switch (axis) {
-        case 'vertical': return [row, c - dy];
-        case 'horizontal': return [c - dx, col];
-        case 'diag1': return [c - dy, c - dx];
-        case 'diag2': return [c + dy, c + dx];
-      }
-    }
-
-    function updateStatus() {
-      status.textContent = `${currentPlayer === "black" ? "黒" : "白"}の番です`;
-    }
-
-    function handleCellClick(row, col) {
-      if (gameOver || getCell(row, col).textContent) return;
-      if (placedThisTurn === 0) {
-        placePiece(row, col, currentPlayer);
-        firstPlacement = { row, col };
-        placedThisTurn = 1;
-        clearHints();
-        const axes = ['vertical', 'horizontal', 'diag1', 'diag2'];
-        const shown = new Set();
-        for (const axis of axes) {
-          const [r, c] = getSymPoint(row, col, axis);
-          if (r >= 0 && r < 7 && c >= 0 && c < 7 && !(r === row && c === col)) {
-            const key = `${r},${c}`;
-            if (!shown.has(key)) {
-              shown.add(key);
-              showHint(r, c);
-            }
-          }
-        }
-      } else if (placedThisTurn === 1) {
-        if (!getCell(row, col).querySelector(".hint")) return;
-        placePiece(row, col, currentPlayer);
-        clearHints();
-        if (checkVictory(currentPlayer === "black" ? "black-piece" : "white-piece")) {
-          status.textContent = `${currentPlayer === "black" ? "黒" : "白"}の勝ちです！`;
-          beep(880, 300);
-          gameOver = true;
-          return;
-        }
-        placedThisTurn = 0;
-        firstPlacement = null;
-        currentPlayer = currentPlayer === "black" ? "white" : "black";
-        updateStatus();
-      }
-    }
-
-    function checkVictory(cls) {
-      const get = (r, c) => getCell(r, c)?.classList.contains(cls);
-      for (let r = 0; r <= 5; r++) {
-        for (let c = 0; c <= 5; c++) {
-          if (get(r, c) && get(r, c + 1) && get(r + 1, c) && get(r + 1, c + 1)) return true;
-        }
-      }
-      for (let r = 1; r <= 5; r++) {
-        for (let c = 1; c <= 5; c++) {
-          if (
-            (get(r, c) && get(r - 1, c) && get(r + 1, c) && get(r, c - 1) && get(r, c + 1)) ||
-            (get(r, c) && get(r - 1, c - 1) && get(r + 1, c + 1) && get(r - 1, c + 1) && get(r + 1, c - 1))
-          ) return true;
-        }
-      }
-      return false;
-    }
-
-    function resetGame() {
-      board.innerHTML = "";
-      record.textContent = "";
-      cells.length = 0;
-      moveHistory.length = 0;
-      currentPlayer = "black";
-      placedThisTurn = 0;
-      firstPlacement = null;
-      gameOver = false;
-      for (let row = 0; row < 7; row++) {
-        for (let col = 0; col < 7; col++) {
-          const cell = document.createElement("div");
-          cell.className = "cell";
-          if (row === 3 || col === 3 || row === col || row + col === 6) {
-            cell.classList.add("axis-cell");
-          }
-          if (row === 3 && col === 3) {
-            cell.textContent = "●";
-            cell.classList.add("white-piece");
-          }
-          cell.addEventListener("click", () => handleCellClick(row, col));
-          board.appendChild(cell);
-          cells.push(cell);
-        }
-      }
-      updateStatus();
-    }
-
-    resetGame();
-    window.resetGame = resetGame;
-  </script>
-  <div style="font-size: 12px; color: #aaa; margin-top: 40px; text-align: center;">製作：上田悠</div>
+  <div class="game-footer">製作：上田悠</div>
+  <script src="game.js"></script>
 </body>
 </html>
