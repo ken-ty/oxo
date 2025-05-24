@@ -1,3 +1,11 @@
-export default function Page() {
-  return <h1>Hello, Next.js!</h1>;
+import GameBoard from './components/GameBoard';
+import FirebaseConfig from './components/firebase-config';
+
+export default function Home() {
+  return (
+    <main>
+      <FirebaseConfig />
+      <GameBoard />
+    </main>
+  );
 }
