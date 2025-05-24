@@ -6,7 +6,13 @@
 const GAME_CONSTANTS = {
   BOARD_SIZE: 7,
   CENTER: 3,
-  AXES: ['vertical', 'horizontal', 'diag1', 'diag2']
+  AXES: ['vertical', 'horizontal', 'diag1', 'diag2'],
+  GAME_STATES: {
+    WAITING: 'waiting',   // ルーム作成、相手待ち
+    READY: 'ready',       // 両プレイヤー参加、開始待ち
+    PLAYING: 'playing',   // ゲーム進行中
+    FINISHED: 'finished'  // ゲーム終了
+  }
 };
 
 /**
@@ -33,6 +39,8 @@ class OXOGame {
     this.undoButton = document.getElementById("undo-button");
     this.resetButton = document.getElementById("reset-button");
     this.startGameButton = document.getElementById("start-game-button");
+    this.endGameButton = document.getElementById("end-game-button");
+    this.onlineStatusElement = document.getElementById("online-status");
   }
 
   /**
@@ -49,6 +57,8 @@ class OXOGame {
     // オンラインモード用
     this.isOnlineMode = false;
     this.isStarted = false;
+    this.gameState = GAME_CONSTANTS.GAME_STATES.WAITING;
+    this.lastUpdateTime = 0;
   }
 
   /**
@@ -60,6 +70,14 @@ class OXOGame {
     
     if (this.startGameButton) {
       this.startGameButton.addEventListener("click", () => this.startGame());
+    }
+    
+    if (this.endGameButton) {
+      this.endGameButton.addEventListener("click", () => {
+        if (window.firebaseConnect && typeof window.firebaseConnect.disbandRoom === 'function') {
+          window.firebaseConnect.disbandRoom();
+        }
+      });
     }
   }
   
@@ -211,7 +229,20 @@ class OXOGame {
   updateStatus() {
     const playerText = this.currentPlayer === "black" ? "黒" : "白";
     
+    if (this.gameOver) {
+      const winner = this.currentPlayer === "black" ? '黒' : '白';
+      this.statusElement.textContent = `${winner}の勝ち！`;
+      this.statusElement.classList.add("victory");
+      return;
+    }
+    
     if (this.isOnlineMode) {
+      if (!this.isStarted) {
+        this.statusElement.textContent = "ゲーム開始ボタンを押してください";
+        this.statusElement.style.color = '#FF9800'; // オレンジ色
+        return;
+      }
+      
       if (window.playerRole === this.currentPlayer) {
         this.statusElement.textContent = `あなたの番です (${playerText})`;
         this.statusElement.style.color = '#4CAF50'; // 緑色で強調
@@ -254,7 +285,7 @@ class OXOGame {
     
     // オンラインモードでゲームが開始されていない場合は無視
     if (this.isOnlineMode && !this.isStarted) {
-      this.statusElement.textContent = "ゲームを開始ボタンを押してください";
+      this.statusElement.textContent = "ゲーム開始ボタンを押してください";
       return true;
     }
     
@@ -321,6 +352,7 @@ class OXOGame {
     const playerClass = this.currentPlayer === "black" ? "black-piece" : "white-piece";
     if (this.checkVictory(playerClass)) {
       this.gameOver = true;
+      this.gameState = GAME_CONSTANTS.GAME_STATES.FINISHED;
       this.statusElement.textContent = `${this.currentPlayer === "black" ? '黒' : '白'}の勝ち！`;
       this.statusElement.classList.add("victory");
       this.beep(660, 200);
@@ -450,21 +482,26 @@ class OXOGame {
     const gameRef = window.db.ref(`games/${window.roomId}`);
     
     // ゲーム開始状態を更新
-    gameRef.child('isStarted').set(true)
-      .then(() => {
-        console.log('ゲームを開始しました');
-        this.isStarted = true;
-        
-        // ゲーム開始ボタンを非表示
-        const startContainer = document.getElementById('game-start-container');
-        if (startContainer) startContainer.style.display = 'none';
-        
-        // ステータス表示を更新
-        this.updateStatus();
-      })
-      .catch(error => {
-        console.error('ゲーム開始エラー:', error);
-      });
+    gameRef.update({
+      isStarted: true,
+      gameState: GAME_CONSTANTS.GAME_STATES.PLAYING,
+      startedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+    .then(() => {
+      console.log('ゲームを開始しました');
+      this.isStarted = true;
+      this.gameState = GAME_CONSTANTS.GAME_STATES.PLAYING;
+      
+      // ゲーム開始ボタンを非表示
+      const startContainer = document.getElementById('game-start-container');
+      if (startContainer) startContainer.style.display = 'none';
+      
+      // ステータス表示を更新
+      this.updateStatus();
+    })
+    .catch(error => {
+      console.error('ゲーム開始エラー:', error);
+    });
   }
   
   /**
@@ -475,10 +512,14 @@ class OXOGame {
     window.isOnlineMode = true;
     
     // オンラインステータスを更新
-    const onlineStatus = document.getElementById('online-status');
-    if (onlineStatus) {
-      onlineStatus.textContent = 'オンライン';
-      onlineStatus.style.color = '#4CAF50';
+    if (this.onlineStatusElement) {
+      this.onlineStatusElement.textContent = 'オンライン';
+      this.onlineStatusElement.style.color = '#4CAF50';
+    }
+    
+    // 終了ボタンを表示
+    if (this.endGameButton) {
+      this.endGameButton.style.display = 'block';
     }
     
     // ステータス表示を更新
@@ -507,6 +548,10 @@ class OXOGame {
       currentPlayer: this.currentPlayer,
       gameOver: isGameOver,
       isStarted: this.isStarted,
+      gameState: isGameOver ? GAME_CONSTANTS.GAME_STATES.FINISHED : this.gameState,
+      placedThisTurn: this.placedThisTurn,
+      firstPlacement: this.firstPlacement,
+      lastUpdateTime: firebase.database.ServerValue.TIMESTAMP,
       center: {
         row: GAME_CONSTANTS.CENTER,
         col: GAME_CONSTANTS.CENTER,
@@ -521,6 +566,9 @@ class OXOGame {
     
     // Firebaseに保存
     window.db.ref(`games/${window.roomId}`).update(gameState)
+      .then(() => {
+        console.log('ゲーム状態を保存しました');
+      })
       .catch(error => {
         console.error('ゲーム状態の保存エラー:', error);
       });
@@ -532,26 +580,42 @@ class OXOGame {
   syncWithOnlineState(gameState) {
     if (!this.isOnlineMode) return;
     
-    // ゲーム開始状態を更新
-    this.isStarted = gameState.isStarted;
+    // 変更がない場合は更新しない
+    if (gameState.lastUpdateTime && gameState.lastUpdateTime <= this.lastUpdateTime) {
+      return;
+    }
+    
+    // 最終更新時刻を更新
+    if (gameState.lastUpdateTime) {
+      this.lastUpdateTime = gameState.lastUpdateTime;
+    }
+    
+    // ゲーム状態を更新
+    this.gameState = gameState.gameState || GAME_CONSTANTS.GAME_STATES.WAITING;
+    this.isStarted = gameState.isStarted || false;
     
     // ゲーム開始ボタンの表示/非表示
     const startContainer = document.getElementById('game-start-container');
     if (startContainer) {
-      startContainer.style.display = gameState.isStarted ? 'none' : 'block';
+      startContainer.style.display = this.isStarted ? 'none' : 'block';
     }
     
     // ゲーム終了状態の場合
     if (gameState.gameOver) {
+      this.gameOver = true;
       const winner = gameState.winner === 'black' ? '黒' : '白';
       this.statusElement.textContent = `${winner}の勝ち！`;
       this.statusElement.classList.add("victory");
-      this.gameOver = true;
       return;
     }
     
-    // 盤面状態を更新（最初の1回のみ）
-    if (!this.gameOver && gameState.board) {
+    // プレイヤーの手番を更新
+    this.currentPlayer = gameState.currentPlayer || 'black';
+    this.placedThisTurn = gameState.placedThisTurn || 0;
+    this.firstPlacement = gameState.firstPlacement || null;
+    
+    // 盤面状態を更新
+    if (gameState.board) {
       // 盤面をクリア
       this.cells.forEach(cell => {
         cell.textContent = '';
@@ -570,15 +634,15 @@ class OXOGame {
         }
       });
       
-      // ゲーム状態を更新
-      this.currentPlayer = gameState.currentPlayer;
-      this.placedThisTurn = 0;
-      this.firstPlacement = null;
+      // ヒントを更新
       this.clearHints();
-      
-      // ステータス表示を更新
-      this.updateStatus();
+      if (this.placedThisTurn === 1 && this.firstPlacement) {
+        this.showPlacementHints(this.firstPlacement.row, this.firstPlacement.col);
+      }
     }
+    
+    // ステータス表示を更新
+    this.updateStatus();
   }
 }
 

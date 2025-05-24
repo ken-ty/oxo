@@ -16,6 +16,7 @@ describe('OXOGame', () => {
       <button id="undo-button">待った</button>
       <button id="reset-button">リセット</button>
       <button id="start-game-button">ゲームを開始</button>
+      <button id="end-game-button" style="display: none;">ゲーム終了</button>
       <div id="game-start-container" style="display: none;"></div>
       <div id="online-status">オフライン</div>
     `;
@@ -24,6 +25,29 @@ describe('OXOGame', () => {
     window.playerRole = null;
     window.isOnlineMode = false;
     window.roomId = null;
+    
+    // Firebaseのモック
+    window.firebase = {
+      database: {
+        ServerValue: {
+          TIMESTAMP: Date.now()
+        }
+      }
+    };
+    
+    window.db = {
+      ref: jest.fn().mockReturnValue({
+        update: jest.fn().mockResolvedValue({}),
+        child: jest.fn().mockReturnValue({
+          set: jest.fn().mockResolvedValue({})
+        })
+      })
+    };
+    
+    // firebaseConnectのモック
+    window.firebaseConnect = {
+      disbandRoom: jest.fn()
+    };
 
     // game.jsの読み込みと実行（モックではなく実際のコードを使用）
     jest.resetModules();
@@ -47,6 +71,7 @@ describe('OXOGame', () => {
     expect(game.gameOver).toBe(false);
     expect(game.isOnlineMode).toBe(false);
     expect(game.cells.length).toBe(49); // 7x7のボード
+    expect(game.gameState).toBe('waiting');
   });
 
   // ゲームボードのレンダリングテスト
@@ -191,5 +216,116 @@ describe('OXOGame', () => {
     expect(onlineStatus.textContent).toBe('オンライン');
     // CSSのカラー値はブラウザによって形式が異なるので、存在確認のみ行う
     expect(onlineStatus.style.color).not.toBe('');
+    
+    // 終了ボタンが表示されているか確認
+    const endGameButton = document.getElementById('end-game-button');
+    expect(endGameButton.style.display).toBe('block');
+  });
+  
+  // ゲーム開始テスト
+  test('ゲームを開始できる', async () => {
+    // オンラインモードを有効化
+    game.enableOnlineMode();
+    window.roomId = 'test-room';
+    
+    // ゲーム開始
+    await game.startGame();
+    
+    // ゲーム状態が更新されていることを確認
+    expect(game.isStarted).toBe(true);
+    expect(game.gameState).toBe('playing');
+    
+    // Firebaseへの状態更新が呼ばれたことを確認
+    expect(window.db.ref).toHaveBeenCalledWith('games/test-room');
+    expect(window.db.ref().update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isStarted: true,
+        gameState: 'playing'
+      })
+    );
+    
+    // ゲーム開始ボタンが非表示になっていることを確認
+    const startContainer = document.getElementById('game-start-container');
+    expect(startContainer.style.display).toBe('none');
+  });
+  
+  // オンライン状態の同期テスト
+  test('オンライン状態と同期できる', () => {
+    // オンラインモードを有効化
+    game.enableOnlineMode();
+    
+    // モック状態データ
+    const gameState = {
+      board: Array(49).fill(null),
+      currentPlayer: 'white',
+      gameOver: false,
+      isStarted: true,
+      gameState: 'playing',
+      placedThisTurn: 1,
+      firstPlacement: { row: 2, col: 2 },
+      lastUpdateTime: Date.now()
+    };
+    
+    // 盤面に黒のコマを配置
+    gameState.board[2 * 7 + 2] = 'black';
+    
+    // 状態を同期
+    game.syncWithOnlineState(gameState);
+    
+    // ゲーム状態が更新されていることを確認
+    expect(game.currentPlayer).toBe('white');
+    expect(game.isStarted).toBe(true);
+    expect(game.gameState).toBe('playing');
+    expect(game.placedThisTurn).toBe(1);
+    
+    // 盤面が正しく更新されていることを確認
+    const cell = game.getCell(2, 2);
+    expect(cell.classList.contains('black-piece')).toBe(true);
+    expect(cell.textContent).toBe('●');
+    
+    // ヒントが表示されていることを確認
+    const hints = document.querySelectorAll('.hint');
+    expect(hints.length).toBeGreaterThan(0);
+  });
+  
+  // ゲーム終了状態の同期テスト
+  test('ゲーム終了状態を同期できる', () => {
+    // オンラインモードを有効化
+    game.enableOnlineMode();
+    
+    // モック状態データ（ゲーム終了）
+    const gameState = {
+      board: Array(49).fill(null),
+      currentPlayer: 'black',
+      gameOver: true,
+      isStarted: true,
+      gameState: 'finished',
+      winner: 'black',
+      lastUpdateTime: Date.now()
+    };
+    
+    // 状態を同期
+    game.syncWithOnlineState(gameState);
+    
+    // ゲーム状態が更新されていることを確認
+    expect(game.gameOver).toBe(true);
+    
+    // 勝利メッセージが表示されていることを確認
+    const status = document.getElementById('status');
+    expect(status.textContent).toBe('黒の勝ち！');
+    expect(status.classList.contains('victory')).toBe(true);
+  });
+  
+  // 終了ボタンクリックテスト
+  test('終了ボタンでルームを解散できる', () => {
+    // オンラインモードを有効化
+    game.enableOnlineMode();
+    
+    // 終了ボタンをクリック
+    const endGameButton = document.getElementById('end-game-button');
+    endGameButton.click();
+    
+    // firebaseConnectのdisbandRoomメソッドが呼ばれたことを確認
+    expect(window.firebaseConnect.disbandRoom).toHaveBeenCalled();
   });
 }); 

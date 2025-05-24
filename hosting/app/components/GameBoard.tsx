@@ -82,6 +82,11 @@ export default function GameBoard() {
         <div id="game-start-container" style={{display: 'none', marginTop: '10px'}}>
           <button id="start-game-button" className="game-button start-button">ゲームを開始</button>
         </div>
+        
+        {/* ゲーム終了ボタン - 最初は非表示 */}
+        <div id="end-game-container" style={{marginTop: '10px'}}>
+          <button id="end-game-button" className="game-button end-button" style={{display: 'none', backgroundColor: '#f44336'}}>ゲーム終了</button>
+        </div>
       </div>
       
       <div id="status" className="game-status">黒の番です</div>
