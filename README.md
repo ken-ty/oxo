@@ -12,6 +12,16 @@
 - CSS
 - Firebase Realtime Database (対戦機能)
 
+ローカルテスト:
+
+```
+firebase serve
+```
+
+デプロイ:
+
+main にマージすると自動でデプロイされます。
+
 ## ルール
 
 - 先手は黒、交互に2つずつコマを置きます。

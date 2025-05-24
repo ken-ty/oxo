@@ -30,6 +30,9 @@ class OXOGame {
     this.gameOver = false;
     this.moveHistory = [];
     
+    // オンラインモード用
+    this.isOnlineMode = false;
+    
     // イベントリスナーの設定
     this.undoButton.addEventListener("click", () => this.undoMove());
     this.resetButton.addEventListener("click", () => this.resetGame());
@@ -111,6 +114,12 @@ class OXOGame {
    * 一手戻る
    */
   undoMove() {
+    // オンラインモードでは待ったできない
+    if (this.isOnlineMode) {
+      alert('オンラインモードでは待ったはできません');
+      return;
+    }
+    
     if (this.gameOver || this.moveHistory.length === 0) return;
     
     const stepsToUndo = (this.placedThisTurn === 1 || this.moveHistory.length === 1) ? 1 : 2;
@@ -177,6 +186,12 @@ class OXOGame {
     // ゲーム終了時または既に石がある場合は無視
     if (this.gameOver || this.getCell(row, col).textContent) return;
     
+    // オンラインモードの場合、自分の手番でなければ無視
+    if (this.isOnlineMode && window.playerRole !== this.currentPlayer) {
+      alert('相手の番です');
+      return;
+    }
+    
     if (this.placedThisTurn === 0) {
       // 1つ目のコマを置く
       this.placePiece(row, col, this.currentPlayer);
@@ -197,6 +212,11 @@ class OXOGame {
           }
         }
       }
+      
+      // オンラインモードの場合、Firebaseに状態を保存
+      if (this.isOnlineMode) {
+        this.saveGameStateToFirebase();
+      }
     } else if (this.placedThisTurn === 1) {
       // ヒントがない場所には置けない
       if (!this.getCell(row, col).querySelector(".hint")) return;
@@ -210,6 +230,12 @@ class OXOGame {
         this.statusElement.textContent = `${this.currentPlayer === "black" ? "黒" : "白"}の勝ちです！`;
         this.beep(880, 300);
         this.gameOver = true;
+        
+        // オンラインモードの場合、Firebaseに勝利状態を保存
+        if (this.isOnlineMode) {
+          this.saveGameStateToFirebase(true, this.currentPlayer);
+        }
+        
         return;
       }
       
@@ -218,6 +244,11 @@ class OXOGame {
       this.firstPlacement = null;
       this.currentPlayer = this.currentPlayer === "black" ? "white" : "black";
       this.updateStatus();
+      
+      // オンラインモードの場合、Firebaseに状態を保存
+      if (this.isOnlineMode) {
+        this.saveGameStateToFirebase();
+      }
     }
   }
   
@@ -288,8 +319,125 @@ class OXOGame {
     }
     
     this.updateStatus();
+    
+    // オンラインモードで新規ゲームの場合
+    if (this.isOnlineMode && window.roomId) {
+      this.saveGameStateToFirebase();
+    }
+  }
+  
+  /**
+   * オンラインモードを有効にする
+   */
+  enableOnlineMode() {
+    this.isOnlineMode = true;
+    
+    // 待ったボタンを無効化
+    this.undoButton.disabled = true;
+    this.undoButton.style.opacity = 0.5;
+  }
+  
+  /**
+   * Firebaseにゲーム状態を保存
+   */
+  saveGameStateToFirebase(isGameOver = false, winner = null) {
+    if (!window.roomId || !window.db) return;
+    
+    // ボード状態の取得
+    const boardState = Array(BOARD_SIZE * BOARD_SIZE).fill(null);
+    this.cells.forEach((cell, index) => {
+      if (cell.textContent) {
+        if (cell.classList.contains('black-piece')) {
+          boardState[index] = 'black';
+        } else if (cell.classList.contains('white-piece')) {
+          boardState[index] = 'white';
+        }
+      }
+    });
+    
+    // ゲーム状態の作成
+    const gameState = {
+      board: boardState,
+      currentPlayer: this.currentPlayer,
+      gameOver: isGameOver || this.gameOver,
+      placedThisTurn: this.placedThisTurn,
+      firstPlacement: this.firstPlacement,
+      moveHistory: this.moveHistory
+    };
+    
+    if (isGameOver) {
+      gameState.winner = winner;
+    }
+    
+    // Firebaseに保存
+    window.db.ref(`games/${window.roomId}`).update(gameState)
+      .catch(error => {
+        console.error('Error saving game state:', error);
+      });
+  }
+  
+  /**
+   * オンライン状態と同期
+   */
+  syncWithOnlineState(gameState) {
+    if (!this.isOnlineMode) {
+      this.enableOnlineMode();
+    }
+    
+    // ゲームオーバーの場合
+    if (gameState.gameOver && gameState.winner) {
+      this.statusElement.textContent = `${gameState.winner === "black" ? "黒" : "白"}の勝ちです！`;
+      this.gameOver = true;
+      return;
+    }
+    
+    // ボード状態の反映
+    if (gameState.board) {
+      gameState.board.forEach((piece, index) => {
+        const row = Math.floor(index / BOARD_SIZE);
+        const col = index % BOARD_SIZE;
+        const cell = this.getCell(row, col);
+        
+        // セルをクリア
+        cell.textContent = "";
+        cell.classList.remove("black-piece", "white-piece");
+        
+        // 新しい状態を設定
+        if (piece) {
+          cell.textContent = "●";
+          cell.classList.add(piece === "black" ? "black-piece" : "white-piece");
+        }
+      });
+    }
+    
+    // ゲーム状態の更新
+    this.currentPlayer = gameState.currentPlayer;
+    this.placedThisTurn = gameState.placedThisTurn;
+    this.firstPlacement = gameState.firstPlacement;
+    this.gameOver = gameState.gameOver;
+    
+    // ヒントの更新
+    this.clearHints();
+    if (this.placedThisTurn === 1 && this.firstPlacement) {
+      const shown = new Set();
+      for (const axis of AXES) {
+        const [r, c] = this.getSymPoint(this.firstPlacement.row, this.firstPlacement.col, axis);
+        if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && 
+            !(r === this.firstPlacement.row && c === this.firstPlacement.col)) {
+          const key = `${r},${c}`;
+          if (!shown.has(key)) {
+            shown.add(key);
+            this.showHint(r, c);
+          }
+        }
+      }
+    }
+    
+    // ステータス更新
+    this.updateStatus();
   }
 }
 
-// ゲームインスタンスを作成
-const game = new OXOGame(); 
+// ゲームインスタンスを作成し、グローバルに公開
+const game = new OXOGame();
+window.game = game; 

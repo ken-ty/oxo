@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OXO</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
   <div class="game-title">OXO</div>
@@ -17,6 +20,20 @@
     - 2×2の正方形<br>
     - 十字形（縦横 or 斜め）
   </div>
+  
+  <!-- オンラインモード用UI -->
+  <div class="online-controls">
+    <div>
+      <button id="create-room-button" class="game-button">ルーム作成</button>
+      <span id="room-id-display"></span>
+    </div>
+    <div>
+      <input id="join-room-input" placeholder="ルームIDを入力" />
+      <button id="join-room-button" class="game-button">ルーム参加</button>
+    </div>
+    <div id="online-status">オフライン</div>
+  </div>
+  
   <div id="status" class="game-status">黒の番です</div>
   <div class="game-container">
     <div class="row-labels">
@@ -35,6 +52,7 @@
   </div>
 
   <div class="game-footer">製作：上田悠</div>
+  <script src="firebase-config.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

@@ -9,5 +9,8 @@
     "frameworksBackend": {
       "region": "us-central1"
     }
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }
