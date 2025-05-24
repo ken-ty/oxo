@@ -1,59 +1,57 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 export default function GameBoard() {
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Firebase SDKが完全に読み込まれるのを少し待つ
-      setTimeout(() => {
-        console.log('Loading game script...');
-        
-        // Firebase接続スクリプトの読み込み
-        const firebaseConnectScript = document.createElement('script');
-        firebaseConnectScript.src = '/firebase-connect.js';
-        firebaseConnectScript.async = true;
-        
-        firebaseConnectScript.onload = () => {
-          console.log('Firebase connect script loaded successfully!');
-          
-          // Firebase接続スクリプトの後にゲームスクリプトを読み込む
-          const gameScript = document.createElement('script');
-          gameScript.src = '/game.js';
-          gameScript.async = true;
-          
-          gameScript.onload = () => {
-            console.log('Game script loaded successfully!');
-          };
-          
-          gameScript.onerror = (error) => {
-            console.error('Error loading game script:', error);
-          };
-          
-          document.body.appendChild(gameScript);
-        };
-        
-        firebaseConnectScript.onerror = (error) => {
-          console.error('Error loading Firebase connect script:', error);
-        };
-        
-        document.body.appendChild(firebaseConnectScript);
-      }, 1000);
-      
-      return () => {
-        // スクリプト要素を削除
-        const firebaseConnectScript = document.querySelector('script[src="/firebase-connect.js"]');
-        if (firebaseConnectScript) {
-          document.body.removeChild(firebaseConnectScript);
-        }
-        
-        const gameScript = document.querySelector('script[src="/game.js"]');
-        if (gameScript) {
-          document.body.removeChild(gameScript);
-        }
-      };
+  // スクリプト読み込み関数
+  const loadScript = useCallback((src: string, onLoad?: () => void) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    
+    if (onLoad) {
+      script.onload = onLoad;
+    }
+    
+    script.onerror = (error) => {
+      console.error(`Error loading script ${src}:`, error);
+    };
+    
+    document.body.appendChild(script);
+    return script;
+  }, []);
+
+  // スクリプトのクリーンアップ関数
+  const removeScript = useCallback((src: string) => {
+    const script = document.querySelector(`script[src="${src}"]`);
+    if (script) {
+      document.body.removeChild(script);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Firebase SDKが完全に読み込まれるのを少し待つ
+    const timeout = setTimeout(() => {
+      console.log('Loading game script...');
+      
+      // Firebase接続スクリプト読み込み後にゲームスクリプトを読み込む
+      const firebaseScript = loadScript('/firebase-connect.js', () => {
+        console.log('Firebase connect script loaded successfully!');
+        loadScript('/game.js', () => {
+          console.log('Game script loaded successfully!');
+        });
+      });
+    }, 1000);
+    
+    // クリーンアップ関数
+    return () => {
+      clearTimeout(timeout);
+      removeScript('/firebase-connect.js');
+      removeScript('/game.js');
+    };
+  }, [loadScript, removeScript]);
   
   return (
     <>

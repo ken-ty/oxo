@@ -3,9 +3,11 @@
  */
 
 // 定数定義
-const BOARD_SIZE = 7;
-const CENTER = 3;
-const AXES = ['vertical', 'horizontal', 'diag1', 'diag2'];
+const GAME_CONSTANTS = {
+  BOARD_SIZE: 7,
+  CENTER: 3,
+  AXES: ['vertical', 'horizontal', 'diag1', 'diag2']
+};
 
 /**
  * OXOゲームクラス
@@ -15,14 +17,28 @@ class OXOGame {
    * コンストラクタ
    */
   constructor() {
-    // DOM要素
+    this.initDOMElements();
+    this.initGameState();
+    this.setupEventListeners();
+    this.resetGame();
+  }
+
+  /**
+   * DOM要素の初期化
+   */
+  initDOMElements() {
     this.boardElement = document.getElementById("board");
     this.statusElement = document.getElementById("status");
     this.recordElement = document.getElementById("record");
     this.undoButton = document.getElementById("undo-button");
     this.resetButton = document.getElementById("reset-button");
-    
-    // ゲーム状態
+    this.startGameButton = document.getElementById("start-game-button");
+  }
+
+  /**
+   * ゲーム状態の初期化
+   */
+  initGameState() {
     this.cells = [];
     this.currentPlayer = "black";
     this.placedThisTurn = 0;
@@ -32,20 +48,19 @@ class OXOGame {
     
     // オンラインモード用
     this.isOnlineMode = false;
-    this.isStarted = false; // ゲーム開始状態
-    
-    // イベントリスナーの設定
+    this.isStarted = false;
+  }
+
+  /**
+   * イベントリスナーの設定
+   */
+  setupEventListeners() {
     this.undoButton.addEventListener("click", () => this.undoMove());
     this.resetButton.addEventListener("click", () => this.resetGame());
     
-    // ゲーム開始ボタンのイベントリスナー
-    const startGameButton = document.getElementById("start-game-button");
-    if (startGameButton) {
-      startGameButton.addEventListener("click", () => this.startGame());
+    if (this.startGameButton) {
+      this.startGameButton.addEventListener("click", () => this.startGame());
     }
-    
-    // ゲーム開始
-    this.resetGame();
   }
   
   /**
@@ -65,11 +80,13 @@ class OXOGame {
     osc.stop(ctx.currentTime + duration / 1000);
   }
   
+  // === セル操作関連メソッド ===
+  
   /**
    * 指定された位置のセルを取得
    */
   getCell(row, col) {
-    return this.cells[row * BOARD_SIZE + col];
+    return this.cells[row * GAME_CONSTANTS.BOARD_SIZE + col];
   }
   
   /**
@@ -107,7 +124,7 @@ class OXOGame {
       
       // 棋譜に記録
       const colLabel = String.fromCharCode(97 + col); // a-g
-      const rowLabel = BOARD_SIZE - row; // 1-7
+      const rowLabel = GAME_CONSTANTS.BOARD_SIZE - row; // 1-7
       this.recordElement.textContent += `${player === "black" ? '黒' : '白'}: ${colLabel}${rowLabel} `;
       
       // 履歴に追加
@@ -116,6 +133,8 @@ class OXOGame {
     }
     return false;
   }
+  
+  // === ゲームフロー関連メソッド ===
   
   /**
    * 一手戻る
@@ -140,13 +159,7 @@ class OXOGame {
     }
     
     // 棋譜を更新
-    let moves = this.recordElement.textContent.trim().split(/\s+/);
-    if (moves.length >= stepsToUndo * 2) {
-      moves.splice(moves.length - stepsToUndo * 2, stepsToUndo * 2);
-    } else {
-      moves = [];
-    }
-    this.recordElement.textContent = moves.join(" ") + (moves.length > 0 ? " " : "");
+    this.updateGameRecord(stepsToUndo);
     
     // ゲーム状態を更新
     this.placedThisTurn = 0;
@@ -163,10 +176,23 @@ class OXOGame {
   }
   
   /**
+   * 棋譜を更新
+   */
+  updateGameRecord(stepsToUndo) {
+    let moves = this.recordElement.textContent.trim().split(/\s+/);
+    if (moves.length >= stepsToUndo * 2) {
+      moves.splice(moves.length - stepsToUndo * 2, stepsToUndo * 2);
+    } else {
+      moves = [];
+    }
+    this.recordElement.textContent = moves.join(" ") + (moves.length > 0 ? " " : "");
+  }
+  
+  /**
    * 対称点を計算
    */
   getSymPoint(row, col, axis) {
-    const c = CENTER;
+    const c = GAME_CONSTANTS.CENTER;
     const dx = row - c;
     const dy = col - c;
     
@@ -203,102 +229,153 @@ class OXOGame {
    * セルクリック時の処理
    */
   handleCellClick(row, col) {
+    // 基本的なチェック
+    if (this.shouldIgnoreClick(row, col)) return;
+    
+    if (this.placedThisTurn === 0) {
+      this.handleFirstPlacement(row, col);
+    } else if (this.placedThisTurn === 1) {
+      this.handleSecondPlacement(row, col);
+    }
+  }
+  
+  /**
+   * クリックを無視すべきかの判定
+   */
+  shouldIgnoreClick(row, col) {
     // ゲーム終了時または既に石がある場合は無視
-    if (this.gameOver || this.getCell(row, col).textContent) return;
+    if (this.gameOver || this.getCell(row, col).textContent) return true;
     
     // オンラインモードの場合、自分の手番でなければ無視
     if (this.isOnlineMode && window.playerRole !== this.currentPlayer) {
       console.log('相手の番です - あなた:', window.playerRole, '現在の手番:', this.currentPlayer);
-      return;
+      return true;
     }
     
     // オンラインモードでゲームが開始されていない場合は無視
     if (this.isOnlineMode && !this.isStarted) {
       this.statusElement.textContent = "ゲームを開始ボタンを押してください";
-      return;
+      return true;
     }
     
-    if (this.placedThisTurn === 0) {
-      // 1つ目のコマを置く
-      this.placePiece(row, col, this.currentPlayer);
-      this.firstPlacement = { row, col };
-      this.placedThisTurn = 1;
-      
-      // ヒントを表示
-      this.clearHints();
-      const shown = new Set();
-      
-      for (const axis of AXES) {
-        const [r, c] = this.getSymPoint(row, col, axis);
-        if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && !(r === row && c === col)) {
-          const key = `${r},${c}`;
-          if (!shown.has(key)) {
-            shown.add(key);
-            this.showHint(r, c);
-          }
+    return false;
+  }
+  
+  /**
+   * 1つ目のコマの配置処理
+   */
+  handleFirstPlacement(row, col) {
+    // 1つ目のコマを置く
+    this.placePiece(row, col, this.currentPlayer);
+    this.firstPlacement = { row, col };
+    this.placedThisTurn = 1;
+    
+    // ヒントを表示
+    this.showPlacementHints(row, col);
+    
+    // オンラインモードの場合、Firebaseに状態を保存
+    if (this.isOnlineMode) {
+      this.saveGameStateToFirebase();
+    }
+  }
+  
+  /**
+   * 配置可能な場所のヒントを表示
+   */
+  showPlacementHints(row, col) {
+    this.clearHints();
+    const shown = new Set();
+    
+    for (const axis of GAME_CONSTANTS.AXES) {
+      const [r, c] = this.getSymPoint(row, col, axis);
+      if (this.isValidPosition(r, c) && !(r === row && c === col)) {
+        const key = `${r},${c}`;
+        if (!shown.has(key)) {
+          shown.add(key);
+          this.showHint(r, c);
         }
-      }
-      
-      // オンラインモードの場合、Firebaseに状態を保存
-      if (this.isOnlineMode) {
-        this.saveGameStateToFirebase();
-      }
-    } else if (this.placedThisTurn === 1) {
-      // ヒントがない場所には置けない
-      if (!this.getCell(row, col).querySelector(".hint")) return;
-      
-      // 2つ目のコマを置く
-      this.placePiece(row, col, this.currentPlayer);
-      this.clearHints();
-      
-      // 勝利判定
-      if (this.checkVictory(this.currentPlayer === "black" ? "black-piece" : "white-piece")) {
-        this.statusElement.textContent = `${this.currentPlayer === "black" ? "黒" : "白"}の勝ちです！`;
-        this.beep(880, 300);
-        this.gameOver = true;
-        
-        // オンラインモードの場合、Firebaseに勝利状態を保存
-        if (this.isOnlineMode) {
-          this.saveGameStateToFirebase(true, this.currentPlayer);
-        }
-        
-        return;
-      }
-      
-      // 次のプレイヤーへ
-      this.placedThisTurn = 0;
-      this.firstPlacement = null;
-      this.currentPlayer = this.currentPlayer === "black" ? "white" : "black";
-      this.updateStatus();
-      
-      // オンラインモードの場合、Firebaseに状態を保存
-      if (this.isOnlineMode) {
-        this.saveGameStateToFirebase();
       }
     }
   }
   
   /**
-   * 勝利判定
+   * 有効な位置かどうかを判定
+   */
+  isValidPosition(row, col) {
+    return row >= 0 && row < GAME_CONSTANTS.BOARD_SIZE && 
+           col >= 0 && col < GAME_CONSTANTS.BOARD_SIZE;
+  }
+  
+  /**
+   * 2つ目のコマの配置処理
+   */
+  handleSecondPlacement(row, col) {
+    // ヒントがない場所には置けない
+    if (!this.getCell(row, col).querySelector(".hint")) return;
+    
+    // 2つ目のコマを置く
+    this.placePiece(row, col, this.currentPlayer);
+    this.clearHints();
+    
+    // 勝利判定
+    const playerClass = this.currentPlayer === "black" ? "black-piece" : "white-piece";
+    if (this.checkVictory(playerClass)) {
+      this.gameOver = true;
+      this.statusElement.textContent = `${this.currentPlayer === "black" ? '黒' : '白'}の勝ち！`;
+      this.statusElement.classList.add("victory");
+      this.beep(660, 200);
+      
+      // オンラインモードの場合、勝利状態を保存
+      if (this.isOnlineMode) {
+        this.saveGameStateToFirebase(true, this.currentPlayer);
+      }
+      
+      return;
+    }
+    
+    // 次のプレイヤーに交代
+    this.currentPlayer = this.currentPlayer === "black" ? "white" : "black";
+    this.placedThisTurn = 0;
+    this.firstPlacement = null;
+    
+    // ステータス表示を更新
+    this.updateStatus();
+    
+    // オンラインモードの場合、Firebaseに状態を保存
+    if (this.isOnlineMode) {
+      this.saveGameStateToFirebase();
+    }
+  }
+  
+  /**
+   * 勝利条件をチェック
    */
   checkVictory(cls) {
     const get = (r, c) => this.getCell(r, c)?.classList.contains(cls);
     
-    // 2x2の正方形チェック
-    for (let r = 0; r <= 5; r++) {
-      for (let c = 0; c <= 5; c++) {
-        if (get(r, c) && get(r, c + 1) && get(r + 1, c) && get(r + 1, c + 1)) return true;
-      }
-    }
-    
-    // 十字形チェック
-    for (let r = 1; r <= 5; r++) {
-      for (let c = 1; c <= 5; c++) {
-        // 縦横の十字
-        if (get(r, c) && get(r - 1, c) && get(r + 1, c) && get(r, c - 1) && get(r, c + 1)) return true;
+    // 全てのセルをチェック
+    for (let r = 0; r < GAME_CONSTANTS.BOARD_SIZE; r++) {
+      for (let c = 0; c < GAME_CONSTANTS.BOARD_SIZE; c++) {
+        // 2x2の正方形チェック
+        if (r < GAME_CONSTANTS.BOARD_SIZE - 1 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
+          if (get(r, c) && get(r, c+1) && get(r+1, c) && get(r+1, c+1)) {
+            return true;
+          }
+        }
         
-        // 斜めの十字
-        if (get(r, c) && get(r - 1, c - 1) && get(r + 1, c + 1) && get(r - 1, c + 1) && get(r + 1, c - 1)) return true;
+        // 十字形チェック - 縦横
+        if (r > 0 && r < GAME_CONSTANTS.BOARD_SIZE - 1 && c > 0 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
+          if (get(r, c) && get(r-1, c) && get(r+1, c) && get(r, c-1) && get(r, c+1)) {
+            return true;
+          }
+        }
+        
+        // 十字形チェック - 斜め
+        if (r > 0 && r < GAME_CONSTANTS.BOARD_SIZE - 1 && c > 0 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
+          if (get(r, c) && get(r-1, c-1) && get(r-1, c+1) && get(r+1, c-1) && get(r+1, c+1)) {
+            return true;
+          }
+        }
       }
     }
     
@@ -309,167 +386,143 @@ class OXOGame {
    * ゲームをリセット
    */
   resetGame() {
-    // ボードと状態をクリア
-    this.boardElement.innerHTML = "";
-    this.recordElement.textContent = "";
-    this.cells = [];
-    this.moveHistory = [];
+    // ゲーム状態をリセット
+    this.initGameState();
     
-    // 初期状態に戻す
-    this.currentPlayer = "black";
-    this.placedThisTurn = 0;
-    this.firstPlacement = null;
-    this.gameOver = false;
+    // 盤面をクリア
+    this.boardElement.innerHTML = '';
+    this.recordElement.textContent = '';
+    this.statusElement.classList.remove("victory");
     
-    // ボードを作成
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE; col++) {
-        const cell = document.createElement("div");
-        cell.className = "cell";
-        
-        // 軸のセルは色を変える
-        if (row === CENTER || col === CENTER || row === col || row + col === BOARD_SIZE - 1) {
-          cell.classList.add("axis-cell");
-        }
-        
-        // 中央には白いコマを初期配置
-        if (row === CENTER && col === CENTER) {
-          cell.textContent = "●";
-          cell.classList.add("white-piece");
-        }
-        
-        cell.addEventListener("click", () => this.handleCellClick(row, col));
-        this.boardElement.appendChild(cell);
-        this.cells.push(cell);
-      }
-    }
+    // 盤面を生成
+    this.createBoard();
     
+    // 初期状態を設定
+    this.setupInitialState();
+    
+    // ステータス表示を更新
     this.updateStatus();
     
-    // オンラインモードで新規ゲームの場合
-    if (this.isOnlineMode && window.roomId) {
+    // オンラインモードの場合、Firebaseに状態を保存
+    if (this.isOnlineMode) {
       this.saveGameStateToFirebase();
     }
   }
   
   /**
-   * ゲーム開始処理（オンラインモード用）
+   * 盤面を作成
    */
-  startGame() {
-    if (!this.isOnlineMode || !window.roomId) {
-      console.log('オンラインモードでないか、ルームIDがありません');
-      return;
-    }
-    
-    // ゲーム開始状態を更新
-    this.isStarted = true;
-    
-    // ランダムに先手後手を決定（ホストが決める）
-    if (window.playerRole === 'black') { // ホストの場合
-      const roles = Math.random() < 0.5 ? 
-        { black: 'host', white: 'guest' } : 
-        { black: 'guest', white: 'host' };
-      
-      // プレイヤーのロールを更新
-      window.playerRole = roles.black === 'host' ? 'black' : 'white';
-      
-      // Firebaseにゲーム開始状態と役割を保存
-      window.db.ref(`games/${window.roomId}`).update({
-        isStarted: true,
-        players: roles,
-        currentPlayer: 'black' // 常に黒が先手
-      }).then(() => {
-        this.updateStatus();
+  createBoard() {
+    // 7x7のマス目を作成
+    for (let row = 0; row < GAME_CONSTANTS.BOARD_SIZE; row++) {
+      for (let col = 0; col < GAME_CONSTANTS.BOARD_SIZE; col++) {
+        const cell = document.createElement("div");
+        cell.classList.add("cell");
         
-        // ゲーム開始ボタンを非表示にする
-        const startContainer = document.getElementById('game-start-container');
-        if (startContainer) startContainer.style.display = 'none';
+        // クリックイベントを設定
+        cell.addEventListener("click", () => this.handleCellClick(row, col));
         
-        // 役割の更新をUIに反映
-        const roleText = window.playerRole === 'black' ? '黒（先手）' : '白（後手）';
-        const onlineStatus = document.getElementById('online-status');
-        if (onlineStatus) {
-          onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
-          onlineStatus.style.color = '#4CAF50';
-        }
-        
-        // 開始メッセージ
-        this.statusElement.textContent = 'ゲームを開始しました！';
-        setTimeout(() => this.updateStatus(), 2000);
-      }).catch(error => {
-        console.error('Error starting game:', error);
-      });
-    } else {
-      // ゲストの場合は何もしない（ホストが決定するのを待つ）
-      this.statusElement.textContent = 'ホストがゲームを開始するのを待っています...';
+        this.boardElement.appendChild(cell);
+        this.cells.push(cell);
+      }
     }
   }
   
   /**
-   * オンラインモードを有効にする
+   * 初期状態を設定
+   */
+  setupInitialState() {
+    // 中央に白を配置
+    const centerCell = this.getCell(GAME_CONSTANTS.CENTER, GAME_CONSTANTS.CENTER);
+    centerCell.textContent = "●";
+    centerCell.classList.add("white-piece");
+  }
+  
+  // === オンラインモード関連メソッド ===
+  
+  /**
+   * ゲームを開始
+   */
+  startGame() {
+    if (!this.isOnlineMode) return;
+    
+    // ルームの参照
+    const gameRef = window.db.ref(`games/${window.roomId}`);
+    
+    // ゲーム開始状態を更新
+    gameRef.child('isStarted').set(true)
+      .then(() => {
+        console.log('ゲームを開始しました');
+        this.isStarted = true;
+        
+        // ゲーム開始ボタンを非表示
+        const startContainer = document.getElementById('game-start-container');
+        if (startContainer) startContainer.style.display = 'none';
+        
+        // ステータス表示を更新
+        this.updateStatus();
+      })
+      .catch(error => {
+        console.error('ゲーム開始エラー:', error);
+      });
+  }
+  
+  /**
+   * オンラインモードを有効化
    */
   enableOnlineMode() {
     this.isOnlineMode = true;
+    window.isOnlineMode = true;
     
-    // 待ったボタンを無効化
-    this.undoButton.disabled = true;
-    this.undoButton.style.opacity = 0.5;
-    
-    // 自分のロールに応じたステータス表示
-    this.updateStatus();
-    
-    // ステータスに自分の役割を表示
-    const roleText = window.playerRole === 'black' ? '黒（ホスト）' : '白（ゲスト）';
+    // オンラインステータスを更新
     const onlineStatus = document.getElementById('online-status');
     if (onlineStatus) {
-      onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
-      onlineStatus.style.color = '#4CAF50'; // 緑色
+      onlineStatus.textContent = 'オンライン';
+      onlineStatus.style.color = '#4CAF50';
     }
     
-    // ゲーム開始ボタンをホストのみ表示
-    const startContainer = document.getElementById('game-start-container');
-    if (startContainer) {
-      startContainer.style.display = window.playerRole === 'black' ? 'block' : 'none';
-    }
+    // ステータス表示を更新
+    this.updateStatus();
   }
   
   /**
    * Firebaseにゲーム状態を保存
    */
   saveGameStateToFirebase(isGameOver = false, winner = null) {
-    if (!window.roomId || !window.db) return;
+    if (!this.isOnlineMode || !window.roomId) return;
     
-    // ボード状態の取得
-    const boardState = Array(BOARD_SIZE * BOARD_SIZE).fill(null);
+    // 盤面状態を配列に変換
+    const boardState = Array(GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE).fill(null);
     this.cells.forEach((cell, index) => {
-      if (cell.textContent) {
-        if (cell.classList.contains('black-piece')) {
-          boardState[index] = 'black';
-        } else if (cell.classList.contains('white-piece')) {
-          boardState[index] = 'white';
-        }
+      if (cell.classList.contains('black-piece')) {
+        boardState[index] = 'black';
+      } else if (cell.classList.contains('white-piece')) {
+        boardState[index] = 'white';
       }
     });
     
-    // ゲーム状態の作成
+    // ゲーム状態オブジェクト
     const gameState = {
       board: boardState,
       currentPlayer: this.currentPlayer,
-      gameOver: isGameOver || this.gameOver,
-      placedThisTurn: this.placedThisTurn,
-      firstPlacement: this.firstPlacement,
-      moveHistory: this.moveHistory,
-      isStarted: this.isStarted
+      gameOver: isGameOver,
+      isStarted: this.isStarted,
+      center: {
+        row: GAME_CONSTANTS.CENTER,
+        col: GAME_CONSTANTS.CENTER,
+        piece: 'white'
+      }
     };
     
-    if (isGameOver) {
+    // 勝者情報を追加（勝利時）
+    if (isGameOver && winner) {
       gameState.winner = winner;
     }
     
     // Firebaseに保存
     window.db.ref(`games/${window.roomId}`).update(gameState)
       .catch(error => {
-        console.error('Error saving game state:', error);
+        console.error('ゲーム状態の保存エラー:', error);
       });
   }
   
@@ -477,123 +530,57 @@ class OXOGame {
    * オンライン状態と同期
    */
   syncWithOnlineState(gameState) {
-    if (!this.isOnlineMode) {
-      this.enableOnlineMode();
+    if (!this.isOnlineMode) return;
+    
+    // ゲーム開始状態を更新
+    this.isStarted = gameState.isStarted;
+    
+    // ゲーム開始ボタンの表示/非表示
+    const startContainer = document.getElementById('game-start-container');
+    if (startContainer) {
+      startContainer.style.display = gameState.isStarted ? 'none' : 'block';
     }
     
-    // ゲームオーバーの場合
-    if (gameState.gameOver && gameState.winner) {
-      const winnerText = gameState.winner === "black" ? "黒" : "白";
-      const isYouWinner = gameState.winner === window.playerRole;
-      
-      if (isYouWinner) {
-        this.statusElement.textContent = `あなたの勝ちです！ (${winnerText})`;
-        this.statusElement.style.color = '#4CAF50'; // 緑色
-      } else {
-        this.statusElement.textContent = `相手の勝ちです... (${winnerText})`;
-        this.statusElement.style.color = '#F44336'; // 赤色
-      }
-      
+    // ゲーム終了状態の場合
+    if (gameState.gameOver) {
+      const winner = gameState.winner === 'black' ? '黒' : '白';
+      this.statusElement.textContent = `${winner}の勝ち！`;
+      this.statusElement.classList.add("victory");
       this.gameOver = true;
       return;
     }
     
-    const prevPlayer = this.currentPlayer;
-    
-    // ゲーム開始状態の更新
-    if (gameState.isStarted !== undefined) {
-      this.isStarted = gameState.isStarted;
+    // 盤面状態を更新（最初の1回のみ）
+    if (!this.gameOver && gameState.board) {
+      // 盤面をクリア
+      this.cells.forEach(cell => {
+        cell.textContent = '';
+        cell.classList.remove('black-piece', 'white-piece');
+      });
       
-      // ゲーム開始ボタンの表示制御
-      const startContainer = document.getElementById('game-start-container');
-      if (startContainer) {
-        if (this.isStarted) {
-          startContainer.style.display = 'none';
-        } else {
-          // ホストのみボタンを表示
-          startContainer.style.display = window.playerRole === 'black' ? 'block' : 'none';
-        }
-      }
-      
-      // ゲームが開始されたら役割を更新
-      if (this.isStarted && gameState.players) {
-        const isHost = window.playerRole === 'black'; // 現在ホストかどうか
-        
-        // 新しい役割を決定
-        if (isHost) {
-          window.playerRole = gameState.players.black === 'host' ? 'black' : 'white';
-        } else { // ゲスト
-          window.playerRole = gameState.players.white === 'guest' ? 'white' : 'black';
-        }
-        
-        // UI更新
-        const roleText = window.playerRole === 'black' ? '黒（先手）' : '白（後手）';
-        const onlineStatus = document.getElementById('online-status');
-        if (onlineStatus) {
-          onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
-        }
-      }
-    }
-    
-    // ボード状態の反映
-    if (gameState.board) {
+      // 新しい状態を反映
       gameState.board.forEach((piece, index) => {
-        const row = Math.floor(index / BOARD_SIZE);
-        const col = index % BOARD_SIZE;
-        const cell = this.getCell(row, col);
-        
-        // セルをクリア
-        cell.textContent = "";
-        cell.classList.remove("black-piece", "white-piece");
-        
-        // 新しい状態を設定
         if (piece) {
-          cell.textContent = "●";
-          cell.classList.add(piece === "black" ? "black-piece" : "white-piece");
+          const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
+          const col = index % GAME_CONSTANTS.BOARD_SIZE;
+          const cell = this.getCell(row, col);
+          
+          cell.textContent = '●';
+          cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
         }
       });
-    }
-    
-    // ゲーム状態の更新
-    this.currentPlayer = gameState.currentPlayer;
-    this.placedThisTurn = gameState.placedThisTurn;
-    this.firstPlacement = gameState.firstPlacement;
-    this.gameOver = gameState.gameOver;
-    
-    // 手番が変わった場合は効果音を鳴らす
-    if (prevPlayer !== this.currentPlayer && this.currentPlayer === window.playerRole) {
-      // 自分の手番になったら通知音
-      this.beep(700, 150);
       
-      // ちょっと目立たせる
-      this.statusElement.classList.add('status-highlight');
-      setTimeout(() => {
-        this.statusElement.classList.remove('status-highlight');
-      }, 1000);
+      // ゲーム状態を更新
+      this.currentPlayer = gameState.currentPlayer;
+      this.placedThisTurn = 0;
+      this.firstPlacement = null;
+      this.clearHints();
+      
+      // ステータス表示を更新
+      this.updateStatus();
     }
-    
-    // ヒントの更新
-    this.clearHints();
-    if (this.placedThisTurn === 1 && this.firstPlacement) {
-      const shown = new Set();
-      for (const axis of AXES) {
-        const [r, c] = this.getSymPoint(this.firstPlacement.row, this.firstPlacement.col, axis);
-        if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && 
-            !(r === this.firstPlacement.row && c === this.firstPlacement.col)) {
-          const key = `${r},${c}`;
-          if (!shown.has(key)) {
-            shown.add(key);
-            this.showHint(r, c);
-          }
-        }
-      }
-    }
-    
-    // ステータス更新
-    this.updateStatus();
   }
 }
 
-// ゲームインスタンスを作成し、グローバルに公開
-const game = new OXOGame();
-window.game = game; 
+// ゲームのインスタンスを作成して公開
+window.game = new OXOGame(); 

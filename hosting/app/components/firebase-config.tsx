@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, createContext, useContext } from 'react';
 
 // Firebase設定
 const firebaseConfig = {
@@ -13,6 +13,7 @@ const firebaseConfig = {
   appId: "1:889486070533:web:9a1c91c90b1f8b48e18ece"
 };
 
+// グローバル型定義
 declare global {
   interface Window {
     firebase: any;
@@ -24,47 +25,68 @@ declare global {
   }
 }
 
-export default function FirebaseConfig() {
-  const [isFirebaseInitialized, setIsFirebaseInitialized] = useState(false);
+// Firebase状態のコンテキスト
+type FirebaseContextType = {
+  isInitialized: boolean;
+};
 
-  // Firebaseの初期化チェック
+const FirebaseContext = createContext<FirebaseContextType>({
+  isInitialized: false
+});
+
+// Firebaseコンテキストを使用するカスタムフック
+export const useFirebase = () => useContext(FirebaseContext);
+
+export default function FirebaseConfig() {
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Firebaseの初期化処理
   useEffect(() => {
-    const checkFirebase = () => {
-      if (typeof window !== 'undefined' && window.firebase) {
+    // 再帰的に初期化チェック
+    const initializeFirebase = () => {
+      if (typeof window === 'undefined') return;
+      
+      if (window.firebase) {
         console.log('Firebase SDK loaded!');
         
         try {
-          // 多重初期化を防止
+          // 多重初期化防止
           if (!window.db) {
             window.firebase.initializeApp(firebaseConfig);
             window.db = window.firebase.database();
-            console.log('Firebase initialized successfully!');
             
-            // オンライン対戦用の状態
+            // オンライン対戦状態初期化
             window.roomId = null;
             window.isOnlineMode = false;
-            window.playerRole = null; // 'black' または 'white'
+            window.playerRole = null;
             
-            setIsFirebaseInitialized(true);
+            console.log('Firebase initialized successfully!');
+            setIsInitialized(true);
           }
         } catch (error) {
           console.error('Firebase initialization error:', error);
         }
       } else {
         console.log('Firebase SDK not loaded yet, retrying...');
-        setTimeout(checkFirebase, 500);
+        setTimeout(initializeFirebase, 500);
       }
     };
     
-    checkFirebase();
+    initializeFirebase();
+    
+    // クリーンアップ
+    return () => {
+      // Firebaseリスナーのクリーンアップが必要な場合はここに追加
+    };
   }, []);
   
-  // 非表示コンポーネント
   return (
-    <div style={{ display: 'none' }}>
-      <div id="firebase-debug">
-        Firebase Status: {isFirebaseInitialized ? 'Initialized' : 'Initializing...'}
+    <FirebaseContext.Provider value={{ isInitialized }}>
+      <div style={{ display: 'none' }}>
+        <div id="firebase-debug">
+          Firebase Status: {isInitialized ? 'Initialized' : 'Initializing...'}
+        </div>
       </div>
-    </div>
+    </FirebaseContext.Provider>
   );
 } 
