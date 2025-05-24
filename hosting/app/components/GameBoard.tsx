@@ -9,26 +9,47 @@ export default function GameBoard() {
       setTimeout(() => {
         console.log('Loading game script...');
         
-        // ゲームスクリプトの読み込み
-        const script = document.createElement('script');
-        script.src = '/game.js';
-        script.async = true;
+        // Firebase接続スクリプトの読み込み
+        const firebaseConnectScript = document.createElement('script');
+        firebaseConnectScript.src = '/firebase-connect.js';
+        firebaseConnectScript.async = true;
         
-        script.onload = () => {
-          console.log('Game script loaded successfully!');
+        firebaseConnectScript.onload = () => {
+          console.log('Firebase connect script loaded successfully!');
+          
+          // Firebase接続スクリプトの後にゲームスクリプトを読み込む
+          const gameScript = document.createElement('script');
+          gameScript.src = '/game.js';
+          gameScript.async = true;
+          
+          gameScript.onload = () => {
+            console.log('Game script loaded successfully!');
+          };
+          
+          gameScript.onerror = (error) => {
+            console.error('Error loading game script:', error);
+          };
+          
+          document.body.appendChild(gameScript);
         };
         
-        script.onerror = (error) => {
-          console.error('Error loading game script:', error);
+        firebaseConnectScript.onerror = (error) => {
+          console.error('Error loading Firebase connect script:', error);
         };
         
-        document.body.appendChild(script);
+        document.body.appendChild(firebaseConnectScript);
       }, 1000);
       
       return () => {
-        const script = document.querySelector('script[src="/game.js"]');
-        if (script) {
-          document.body.removeChild(script);
+        // スクリプト要素を削除
+        const firebaseConnectScript = document.querySelector('script[src="/firebase-connect.js"]');
+        if (firebaseConnectScript) {
+          document.body.removeChild(firebaseConnectScript);
+        }
+        
+        const gameScript = document.querySelector('script[src="/game.js"]');
+        if (gameScript) {
+          document.body.removeChild(gameScript);
         }
       };
     }
@@ -58,6 +79,11 @@ export default function GameBoard() {
           <button id="join-room-button" className="game-button">ルーム参加</button>
         </div>
         <div id="online-status">オフライン</div>
+        
+        {/* ゲーム開始ボタン - 最初は非表示 */}
+        <div id="game-start-container" style={{display: 'none', marginTop: '10px'}}>
+          <button id="start-game-button" className="game-button start-button">ゲームを開始</button>
+        </div>
       </div>
       
       <div id="status" className="game-status">黒の番です</div>

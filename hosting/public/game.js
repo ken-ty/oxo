@@ -32,10 +32,17 @@ class OXOGame {
     
     // オンラインモード用
     this.isOnlineMode = false;
+    this.isStarted = false; // ゲーム開始状態
     
     // イベントリスナーの設定
     this.undoButton.addEventListener("click", () => this.undoMove());
     this.resetButton.addEventListener("click", () => this.resetGame());
+    
+    // ゲーム開始ボタンのイベントリスナー
+    const startGameButton = document.getElementById("start-game-button");
+    if (startGameButton) {
+      startGameButton.addEventListener("click", () => this.startGame());
+    }
     
     // ゲーム開始
     this.resetGame();
@@ -176,7 +183,20 @@ class OXOGame {
    * ステータス表示を更新
    */
   updateStatus() {
-    this.statusElement.textContent = `${this.currentPlayer === "black" ? "黒" : "白"}の番です`;
+    const playerText = this.currentPlayer === "black" ? "黒" : "白";
+    
+    if (this.isOnlineMode) {
+      if (window.playerRole === this.currentPlayer) {
+        this.statusElement.textContent = `あなたの番です (${playerText})`;
+        this.statusElement.style.color = '#4CAF50'; // 緑色で強調
+      } else {
+        this.statusElement.textContent = `相手の番です (${playerText})`;
+        this.statusElement.style.color = '#FF5722'; // オレンジ色
+      }
+    } else {
+      this.statusElement.textContent = `${playerText}の番です`;
+      this.statusElement.style.color = ''; // デフォルト色にリセット
+    }
   }
   
   /**
@@ -188,7 +208,13 @@ class OXOGame {
     
     // オンラインモードの場合、自分の手番でなければ無視
     if (this.isOnlineMode && window.playerRole !== this.currentPlayer) {
-      alert('相手の番です');
+      console.log('相手の番です - あなた:', window.playerRole, '現在の手番:', this.currentPlayer);
+      return;
+    }
+    
+    // オンラインモードでゲームが開始されていない場合は無視
+    if (this.isOnlineMode && !this.isStarted) {
+      this.statusElement.textContent = "ゲームを開始ボタンを押してください";
       return;
     }
     
@@ -327,6 +353,59 @@ class OXOGame {
   }
   
   /**
+   * ゲーム開始処理（オンラインモード用）
+   */
+  startGame() {
+    if (!this.isOnlineMode || !window.roomId) {
+      console.log('オンラインモードでないか、ルームIDがありません');
+      return;
+    }
+    
+    // ゲーム開始状態を更新
+    this.isStarted = true;
+    
+    // ランダムに先手後手を決定（ホストが決める）
+    if (window.playerRole === 'black') { // ホストの場合
+      const roles = Math.random() < 0.5 ? 
+        { black: 'host', white: 'guest' } : 
+        { black: 'guest', white: 'host' };
+      
+      // プレイヤーのロールを更新
+      window.playerRole = roles.black === 'host' ? 'black' : 'white';
+      
+      // Firebaseにゲーム開始状態と役割を保存
+      window.db.ref(`games/${window.roomId}`).update({
+        isStarted: true,
+        players: roles,
+        currentPlayer: 'black' // 常に黒が先手
+      }).then(() => {
+        this.updateStatus();
+        
+        // ゲーム開始ボタンを非表示にする
+        const startContainer = document.getElementById('game-start-container');
+        if (startContainer) startContainer.style.display = 'none';
+        
+        // 役割の更新をUIに反映
+        const roleText = window.playerRole === 'black' ? '黒（先手）' : '白（後手）';
+        const onlineStatus = document.getElementById('online-status');
+        if (onlineStatus) {
+          onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
+          onlineStatus.style.color = '#4CAF50';
+        }
+        
+        // 開始メッセージ
+        this.statusElement.textContent = 'ゲームを開始しました！';
+        setTimeout(() => this.updateStatus(), 2000);
+      }).catch(error => {
+        console.error('Error starting game:', error);
+      });
+    } else {
+      // ゲストの場合は何もしない（ホストが決定するのを待つ）
+      this.statusElement.textContent = 'ホストがゲームを開始するのを待っています...';
+    }
+  }
+  
+  /**
    * オンラインモードを有効にする
    */
   enableOnlineMode() {
@@ -335,6 +414,23 @@ class OXOGame {
     // 待ったボタンを無効化
     this.undoButton.disabled = true;
     this.undoButton.style.opacity = 0.5;
+    
+    // 自分のロールに応じたステータス表示
+    this.updateStatus();
+    
+    // ステータスに自分の役割を表示
+    const roleText = window.playerRole === 'black' ? '黒（ホスト）' : '白（ゲスト）';
+    const onlineStatus = document.getElementById('online-status');
+    if (onlineStatus) {
+      onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
+      onlineStatus.style.color = '#4CAF50'; // 緑色
+    }
+    
+    // ゲーム開始ボタンをホストのみ表示
+    const startContainer = document.getElementById('game-start-container');
+    if (startContainer) {
+      startContainer.style.display = window.playerRole === 'black' ? 'block' : 'none';
+    }
   }
   
   /**
@@ -362,7 +458,8 @@ class OXOGame {
       gameOver: isGameOver || this.gameOver,
       placedThisTurn: this.placedThisTurn,
       firstPlacement: this.firstPlacement,
-      moveHistory: this.moveHistory
+      moveHistory: this.moveHistory,
+      isStarted: this.isStarted
     };
     
     if (isGameOver) {
@@ -386,9 +483,56 @@ class OXOGame {
     
     // ゲームオーバーの場合
     if (gameState.gameOver && gameState.winner) {
-      this.statusElement.textContent = `${gameState.winner === "black" ? "黒" : "白"}の勝ちです！`;
+      const winnerText = gameState.winner === "black" ? "黒" : "白";
+      const isYouWinner = gameState.winner === window.playerRole;
+      
+      if (isYouWinner) {
+        this.statusElement.textContent = `あなたの勝ちです！ (${winnerText})`;
+        this.statusElement.style.color = '#4CAF50'; // 緑色
+      } else {
+        this.statusElement.textContent = `相手の勝ちです... (${winnerText})`;
+        this.statusElement.style.color = '#F44336'; // 赤色
+      }
+      
       this.gameOver = true;
       return;
+    }
+    
+    const prevPlayer = this.currentPlayer;
+    
+    // ゲーム開始状態の更新
+    if (gameState.isStarted !== undefined) {
+      this.isStarted = gameState.isStarted;
+      
+      // ゲーム開始ボタンの表示制御
+      const startContainer = document.getElementById('game-start-container');
+      if (startContainer) {
+        if (this.isStarted) {
+          startContainer.style.display = 'none';
+        } else {
+          // ホストのみボタンを表示
+          startContainer.style.display = window.playerRole === 'black' ? 'block' : 'none';
+        }
+      }
+      
+      // ゲームが開始されたら役割を更新
+      if (this.isStarted && gameState.players) {
+        const isHost = window.playerRole === 'black'; // 現在ホストかどうか
+        
+        // 新しい役割を決定
+        if (isHost) {
+          window.playerRole = gameState.players.black === 'host' ? 'black' : 'white';
+        } else { // ゲスト
+          window.playerRole = gameState.players.white === 'guest' ? 'white' : 'black';
+        }
+        
+        // UI更新
+        const roleText = window.playerRole === 'black' ? '黒（先手）' : '白（後手）';
+        const onlineStatus = document.getElementById('online-status');
+        if (onlineStatus) {
+          onlineStatus.textContent = `オンライン (あなた: ${roleText})`;
+        }
+      }
     }
     
     // ボード状態の反映
@@ -415,6 +559,18 @@ class OXOGame {
     this.placedThisTurn = gameState.placedThisTurn;
     this.firstPlacement = gameState.firstPlacement;
     this.gameOver = gameState.gameOver;
+    
+    // 手番が変わった場合は効果音を鳴らす
+    if (prevPlayer !== this.currentPlayer && this.currentPlayer === window.playerRole) {
+      // 自分の手番になったら通知音
+      this.beep(700, 150);
+      
+      // ちょっと目立たせる
+      this.statusElement.classList.add('status-highlight');
+      setTimeout(() => {
+        this.statusElement.classList.remove('status-highlight');
+      }, 1000);
+    }
     
     // ヒントの更新
     this.clearHints();

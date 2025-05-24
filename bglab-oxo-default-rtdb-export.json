@@ -1,0 +1,36 @@
+{
+  "games": {
+    "ujq6hr": {
+      "board": {
+        "24": "white"
+      },
+      "center": {
+        "col": 3,
+        "piece": "white",
+        "row": 3
+      },
+      "currentPlayer": "black",
+      "gameOver": false,
+      "players": {
+        "black": "host",
+        "white": "guest"
+      }
+    },
+    "z1kfth": {
+      "board": {
+        "24": "white"
+      },
+      "center": {
+        "col": 3,
+        "piece": "white",
+        "row": 3
+      },
+      "currentPlayer": "black",
+      "gameOver": false,
+      "players": {
+        "black": "host",
+        "white": "guest"
+      }
+    }
+  }
+}
