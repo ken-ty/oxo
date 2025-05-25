@@ -54,6 +54,9 @@ class OXOGame {
     this.gameOver = false;
     this.moveHistory = [];
     
+    // 盤面をkey-valueで管理（a1-g7）
+    this.board = this.createEmptyBoard();
+    
     // オンラインモード用
     this.isOnlineMode = false;
     this.isStarted = false;
@@ -133,10 +136,16 @@ class OXOGame {
    * コマを置く
    */
   placePiece(row, col, player) {
+    const key = this.coordsToKey(row, col);
     const cell = this.getCell(row, col);
-    if (!cell.textContent) {
+    
+    if (!cell.textContent && this.board[key] === "") {
+      // DOM要素を更新
       cell.textContent = "●";
       cell.classList.add(player === "black" ? "black-piece" : "white-piece");
+      
+      // 盤面データを更新
+      this.board[key] = player;
       
       this.beep(500, 80);
       
@@ -172,8 +181,14 @@ class OXOGame {
     for (let i = 0; i < stepsToUndo; i++) {
       const last = this.moveHistory.pop();
       const cell = this.getCell(last.row, last.col);
+      const key = this.coordsToKey(last.row, last.col);
+      
+      // DOM要素をクリア
       cell.textContent = "";
       cell.classList.remove("black-piece", "white-piece");
+      
+      // 盤面データをクリア
+      this.board[key] = "";
     }
     
     // 棋譜を更新
@@ -361,8 +376,7 @@ class OXOGame {
     this.clearHints();
     
     // 勝利判定
-    const playerClass = this.currentPlayer === "black" ? "black-piece" : "white-piece";
-    if (this.checkVictory(playerClass)) {
+    if (this.checkVictory(this.currentPlayer)) {
       this.gameOver = true;
       this.gameState = GAME_CONSTANTS.GAME_STATES.FINISHED;
       this.statusElement.textContent = `${this.currentPlayer === "black" ? '黒' : '白'}の勝ち！`;
@@ -396,8 +410,12 @@ class OXOGame {
   /**
    * 勝利条件をチェック
    */
-  checkVictory(cls) {
-    const get = (r, c) => this.getCell(r, c)?.classList.contains(cls);
+  checkVictory(playerColor) {
+    // key-valueベースでの勝利判定
+    const get = (row, col) => {
+      const key = this.coordsToKey(row, col);
+      return this.board[key] === playerColor;
+    };
     
     // 全てのセルをチェック
     for (let r = 0; r < GAME_CONSTANTS.BOARD_SIZE; r++) {
@@ -478,9 +496,12 @@ class OXOGame {
    * 初期状態を設定
    */
   setupInitialState() {
-    // D-4の位置に白を配置（行は上から数えて3、列は左から数えて3）
-    // ABCDEFGと1234567の表記では、D-4は盤面上の(3, 3)の位置に対応
-    const whiteCell = this.getCell(3, 3);
+    // d4の位置に白を配置
+    this.board['d4'] = 'white';
+    
+    // DOM要素にも反映
+    const { row, col } = this.keyToCoords('d4');
+    const whiteCell = this.getCell(row, col);
     whiteCell.textContent = "●";
     whiteCell.classList.add("white-piece");
   }
@@ -550,58 +571,36 @@ class OXOGame {
     console.log('盤面データのみを更新:', boardData);
     
     try {
-      // 配列かオブジェクトかを確認
-      let boardArray;
-      
-      if (Array.isArray(boardData)) {
-        boardArray = boardData;
-      } else if (typeof boardData === 'object' && boardData !== null) {
-        // オブジェクト形式を配列に変換
-        boardArray = Array(GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE).fill(null);
+      // key-value形式の盤面データを処理
+      if (typeof boardData === 'object' && boardData !== null) {
+        // 盤面をクリア
+        this.cells.forEach(cell => {
+          cell.textContent = '';
+          cell.classList.remove('black-piece', 'white-piece');
+        });
         
-        // キーを数値としてソートして正しい順序で処理
+        // 盤面データを更新
+        this.board = { ...boardData };
+        
+        // DOM要素に反映
         Object.keys(boardData).forEach(key => {
-          const index = parseInt(key, 10);
-          if (!isNaN(index) && index >= 0 && index < boardArray.length) {
-            boardArray[index] = boardData[key];
+          const piece = boardData[key];
+          if (piece && piece !== "") {
+            const { row, col } = this.keyToCoords(key);
+            const cell = this.getCell(row, col);
+            
+            if (cell) {
+              cell.textContent = '●';
+              cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+              console.log(`コマを配置: ${key} (${row},${col}), 色=${piece}`);
+            }
           }
         });
         
-        console.log('オブジェクトから配列に変換:', boardArray);
+        console.log('盤面データの更新完了');
       } else {
         console.error('無効な盤面データ形式:', boardData);
-        return;
       }
-      
-      // 盤面サイズを確認
-      if (boardArray.length !== GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE) {
-        console.error('盤面データのサイズが不正です:', boardArray.length);
-        return;
-      }
-      
-      // 盤面をクリア
-      this.cells.forEach(cell => {
-        cell.textContent = '';
-        cell.classList.remove('black-piece', 'white-piece');
-      });
-      
-      // 新しい盤面データを反映
-      for (let i = 0; i < boardArray.length; i++) {
-        const piece = boardArray[i];
-        if (piece) {
-          const row = Math.floor(i / GAME_CONSTANTS.BOARD_SIZE);
-          const col = i % GAME_CONSTANTS.BOARD_SIZE;
-          const cell = this.getCell(row, col);
-          
-          if (cell) {
-            cell.textContent = '●';
-            cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
-            console.log(`コマを配置: インデックス=${i}, 位置=(${row},${col}), 色=${piece}`);
-          }
-        }
-      }
-      
-      console.log('盤面データの更新完了');
     } catch (error) {
       console.error('盤面データの更新中にエラーが発生しました:', error);
     }
@@ -615,34 +614,12 @@ class OXOGame {
     
     console.log('ゲーム状態保存開始');
     
-    // 盤面状態を配列に変換
-    const boardState = Array(GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE).fill(null);
-    this.cells.forEach((cell, index) => {
-      if (cell.classList.contains('black-piece')) {
-        boardState[index] = 'black';
-      } else if (cell.classList.contains('white-piece')) {
-        boardState[index] = 'white';
-      }
-    });
-    
-    // boardStateが配列であることを確認
-    if (!Array.isArray(boardState)) {
-      console.error('作成した盤面データが配列ではありません:', boardState);
-      return;
-    }
-    
-    // 配列の要素数を確認
-    if (boardState.length !== GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE) {
-      console.error('盤面データのサイズが不正です:', boardState.length);
-      return;
-    }
-    
     // 現在のクライアント時刻を保存（サーバ時刻との整合性のため）
     const clientTime = Date.now();
     
     // ゲーム状態オブジェクト
     const gameState = {
-      board: boardState,
+      board: this.board, // key-value形式の盤面データ
       currentPlayer: this.currentPlayer,
       gameOver: isGameOver,
       isStarted: this.isStarted,
@@ -668,7 +645,7 @@ class OXOGame {
         this.lastUpdateTime = clientTime;
         
         // 確実に盤面データが保存されるよう、個別に保存
-        return window.db.ref(`games/${window.roomId}/board`).set(boardState);
+        return window.db.ref(`games/${window.roomId}/board`).set(this.board);
       })
       .then(() => {
         console.log('盤面データを個別に保存しました');
@@ -755,71 +732,38 @@ class OXOGame {
     
     // 盤面状態を更新
     if (gameState.board) {
-      // boardが配列かどうか確認
       const boardData = gameState.board;
-      if (!Array.isArray(boardData)) {
-        console.warn('boardデータが配列ではないため変換します:', boardData);
+      
+      // key-value形式の盤面データを処理
+      if (typeof boardData === 'object' && boardData !== null && !Array.isArray(boardData)) {
+        console.log('key-value形式の盤面データを処理:', boardData);
         
-        // オブジェクト形式の場合は配列に変換
-        try {
-          // Firebaseの場合、{0: "black", 1: null, ...} のような形式かもしれない
-          const convertedBoard = [];
-          const keys = Object.keys(boardData).sort((a, b) => parseInt(a) - parseInt(b));
-          for (let i = 0; i < keys.length; i++) {
-            convertedBoard[i] = boardData[keys[i]];
-          }
-          
-          console.log('盤面データを変換しました:', convertedBoard);
-          
-          // 盤面をクリア
-          this.cells.forEach(cell => {
-            cell.textContent = '';
-            cell.classList.remove('black-piece', 'white-piece');
-          });
-          
-          // 変換したデータを使用
-          for (let i = 0; i < convertedBoard.length; i++) {
-            const piece = convertedBoard[i];
-            if (piece) {
-              const row = Math.floor(i / GAME_CONSTANTS.BOARD_SIZE);
-              const col = i % GAME_CONSTANTS.BOARD_SIZE;
-              const cell = this.getCell(row, col);
-              
-              if (cell) {
-                cell.textContent = '●';
-                cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
-              } else {
-                console.error(`セルが見つかりません: row=${row}, col=${col}, index=${i}`);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('盤面データの変換に失敗しました:', error);
-          return;
-        }
-      } else {
-        // 配列の場合は通常処理
         // 盤面をクリア
         this.cells.forEach(cell => {
           cell.textContent = '';
           cell.classList.remove('black-piece', 'white-piece');
         });
         
-        // 新しい状態を反映
-        boardData.forEach((piece, index) => {
-          if (piece) {
-            const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
-            const col = index % GAME_CONSTANTS.BOARD_SIZE;
+        // 盤面データを更新
+        this.board = { ...boardData };
+        
+        // DOM要素に反映
+        Object.keys(boardData).forEach(key => {
+          const piece = boardData[key];
+          if (piece && piece !== "") {
+            const { row, col } = this.keyToCoords(key);
             const cell = this.getCell(row, col);
             
             if (cell) {
               cell.textContent = '●';
               cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
             } else {
-              console.error(`セルが見つかりません: row=${row}, col=${col}, index=${index}`);
+              console.error(`セルが見つかりません: ${key} (${row},${col})`);
             }
           }
         });
+      } else {
+        console.warn('予期しない盤面データ形式:', boardData);
       }
       
       // ヒントを更新
@@ -835,6 +779,40 @@ class OXOGame {
     this.updateStatus();
     
     console.log('同期完了:', this);
+  }
+
+  // === 座標変換ヘルパーメソッド ===
+  
+  /**
+   * 行列座標をkey（a1-g7）に変換
+   */
+  coordsToKey(row, col) {
+    const colLabel = String.fromCharCode(97 + col); // a-g
+    const rowLabel = GAME_CONSTANTS.BOARD_SIZE - row; // 1-7
+    return `${colLabel}${rowLabel}`;
+  }
+  
+  /**
+   * key（a1-g7）を行列座標に変換
+   */
+  keyToCoords(key) {
+    const col = key.charCodeAt(0) - 97; // a-g -> 0-6
+    const row = GAME_CONSTANTS.BOARD_SIZE - parseInt(key[1]); // 1-7 -> 6-0
+    return { row, col };
+  }
+  
+  /**
+   * 空の盤面を作成
+   */
+  createEmptyBoard() {
+    const board = {};
+    for (let row = 0; row < GAME_CONSTANTS.BOARD_SIZE; row++) {
+      for (let col = 0; col < GAME_CONSTANTS.BOARD_SIZE; col++) {
+        const key = this.coordsToKey(row, col);
+        board[key] = "";
+      }
+    }
+    return board;
   }
 }
 

@@ -138,8 +138,19 @@ class FirebaseConnect {
   
   // 新しいルームを作成
   createNewRoom(gameRef) {
-    const initialBoard = Array(49).fill(null);
-    initialBoard[24] = 'white'; // D-4の位置に白を配置（3行目4列目 = 3*7+3 = 24）
+    // key-value形式の空の盤面を作成
+    const initialBoard = {};
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < 7; col++) {
+        const colLabel = String.fromCharCode(97 + col); // a-g
+        const rowLabel = 7 - row; // 1-7
+        const key = `${colLabel}${rowLabel}`;
+        initialBoard[key] = "";
+      }
+    }
+    
+    // d4の位置に白を配置
+    initialBoard['d4'] = 'white';
     
     gameRef.set({
       board: initialBoard,
