@@ -36,9 +36,23 @@ createRoomButton.addEventListener('click', () => {
   playerRole = 'black'; // ルーム作成者は黒
   isOnlineMode = true;
   
+  // key-value形式の空の盤面を作成
+  const initialBoard = {};
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 7; col++) {
+      const colLabel = String.fromCharCode(97 + col); // a-g
+      const rowLabel = 7 - row; // 1-7
+      const key = `${colLabel}${rowLabel}`;
+      initialBoard[key] = "";
+    }
+  }
+  
+  // d4の位置に白を配置
+  initialBoard['d4'] = 'white';
+  
   // Firebaseにゲーム初期状態を保存
   const initialState = {
-    board: Array(49).fill(null),
+    board: initialBoard,
     currentPlayer: 'black',
     gameOver: false,
     winner: null,
@@ -46,9 +60,6 @@ createRoomButton.addEventListener('click', () => {
       black: 'host'
     }
   };
-  
-  // D-4の位置にコマを設定（3行目4列目 = 3*7+3 = 24）
-  initialState.board[3 * 7 + 3] = 'white';
   
   db.ref(`games/${roomId}`).set(initialState)
     .then(() => {
