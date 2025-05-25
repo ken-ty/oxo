@@ -88,7 +88,7 @@ export default function GameBoard() {
   
   return (
     <>
-      <div className="game-title">OXO</div>
+      <div className="game-title">OXO beta版</div>
       <div className="rules">
         <strong>ルール:</strong><br />
         ・先手は黒、交互に2つずつコマを置きます。<br />
