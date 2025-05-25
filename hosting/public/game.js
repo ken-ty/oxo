@@ -260,6 +260,10 @@ class OXOGame {
    * セルクリック時の処理
    */
   handleCellClick(row, col) {
+    // デバッグログ
+    console.log(`セルクリック: row=${row}, col=${col}`);
+    console.log(`現在の状態: プレイヤー=${this.currentPlayer}, placedThisTurn=${this.placedThisTurn}, playerRole=${window.playerRole}, isOnlineMode=${this.isOnlineMode}`);
+    
     // 基本的なチェック
     if (this.shouldIgnoreClick(row, col)) return;
     
@@ -296,6 +300,8 @@ class OXOGame {
    * 1つ目のコマの配置処理
    */
   handleFirstPlacement(row, col) {
+    console.log(`1つ目のコマを配置: row=${row}, col=${col}, プレイヤー=${this.currentPlayer}`);
+    
     // 1つ目のコマを置く
     this.placePiece(row, col, this.currentPlayer);
     this.firstPlacement = { row, col };
@@ -306,6 +312,7 @@ class OXOGame {
     
     // オンラインモードの場合、Firebaseに状態を保存
     if (this.isOnlineMode) {
+      console.log('1つ目のコマ配置後、Firebaseに状態を保存します');
       this.saveGameStateToFirebase();
     }
   }
@@ -341,8 +348,13 @@ class OXOGame {
    * 2つ目のコマの配置処理
    */
   handleSecondPlacement(row, col) {
+    console.log(`2つ目のコマを配置: row=${row}, col=${col}, プレイヤー=${this.currentPlayer}`);
+    
     // ヒントがない場所には置けない
-    if (!this.getCell(row, col).querySelector(".hint")) return;
+    if (!this.getCell(row, col).querySelector(".hint")) {
+      console.warn('ヒントがない場所には置けません');
+      return;
+    }
     
     // 2つ目のコマを置く
     this.placePiece(row, col, this.currentPlayer);
@@ -359,6 +371,7 @@ class OXOGame {
       
       // オンラインモードの場合、勝利状態を保存
       if (this.isOnlineMode) {
+        console.log('勝利条件達成、Firebaseに勝利状態を保存します');
         this.saveGameStateToFirebase(true, this.currentPlayer);
       }
       
@@ -375,6 +388,7 @@ class OXOGame {
     
     // オンラインモードの場合、Firebaseに状態を保存
     if (this.isOnlineMode) {
+      console.log('2つ目のコマ配置後、Firebaseに状態を保存します。次のプレイヤー:', this.currentPlayer);
       this.saveGameStateToFirebase();
     }
   }
@@ -527,10 +541,78 @@ class OXOGame {
   }
   
   /**
+   * 盤面データのみを更新する（他の状態は変更しない）
+   */
+  updateBoardOnly(boardData) {
+    if (!this.isOnlineMode) return;
+    
+    console.log('盤面データのみを更新:', boardData);
+    
+    try {
+      // 配列かオブジェクトかを確認
+      let boardArray;
+      
+      if (Array.isArray(boardData)) {
+        boardArray = boardData;
+      } else if (typeof boardData === 'object' && boardData !== null) {
+        // オブジェクト形式を配列に変換
+        boardArray = Array(GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE).fill(null);
+        
+        // キーを数値としてソートして正しい順序で処理
+        Object.keys(boardData).forEach(key => {
+          const index = parseInt(key, 10);
+          if (!isNaN(index) && index >= 0 && index < boardArray.length) {
+            boardArray[index] = boardData[key];
+          }
+        });
+        
+        console.log('オブジェクトから配列に変換:', boardArray);
+      } else {
+        console.error('無効な盤面データ形式:', boardData);
+        return;
+      }
+      
+      // 盤面サイズを確認
+      if (boardArray.length !== GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE) {
+        console.error('盤面データのサイズが不正です:', boardArray.length);
+        return;
+      }
+      
+      // 盤面をクリア
+      this.cells.forEach(cell => {
+        cell.textContent = '';
+        cell.classList.remove('black-piece', 'white-piece');
+      });
+      
+      // 新しい盤面データを反映
+      for (let i = 0; i < boardArray.length; i++) {
+        const piece = boardArray[i];
+        if (piece) {
+          const row = Math.floor(i / GAME_CONSTANTS.BOARD_SIZE);
+          const col = i % GAME_CONSTANTS.BOARD_SIZE;
+          const cell = this.getCell(row, col);
+          
+          if (cell) {
+            cell.textContent = '●';
+            cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+            console.log(`コマを配置: インデックス=${i}, 位置=(${row},${col}), 色=${piece}`);
+          }
+        }
+      }
+      
+      console.log('盤面データの更新完了');
+    } catch (error) {
+      console.error('盤面データの更新中にエラーが発生しました:', error);
+    }
+  }
+  
+  /**
    * Firebaseにゲーム状態を保存
    */
   saveGameStateToFirebase(isGameOver = false, winner = null) {
     if (!this.isOnlineMode || !window.roomId) return;
+    
+    console.log('ゲーム状態保存開始');
     
     // 盤面状態を配列に変換
     const boardState = Array(GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE).fill(null);
@@ -542,6 +624,21 @@ class OXOGame {
       }
     });
     
+    // boardStateが配列であることを確認
+    if (!Array.isArray(boardState)) {
+      console.error('作成した盤面データが配列ではありません:', boardState);
+      return;
+    }
+    
+    // 配列の要素数を確認
+    if (boardState.length !== GAME_CONSTANTS.BOARD_SIZE * GAME_CONSTANTS.BOARD_SIZE) {
+      console.error('盤面データのサイズが不正です:', boardState.length);
+      return;
+    }
+    
+    // 現在のクライアント時刻を保存（サーバ時刻との整合性のため）
+    const clientTime = Date.now();
+    
     // ゲーム状態オブジェクト
     const gameState = {
       board: boardState,
@@ -552,6 +649,7 @@ class OXOGame {
       placedThisTurn: this.placedThisTurn,
       firstPlacement: this.firstPlacement,
       lastUpdateTime: firebase.database.ServerValue.TIMESTAMP,
+      clientUpdateTime: clientTime,
       center: {
         row: GAME_CONSTANTS.CENTER,
         col: GAME_CONSTANTS.CENTER,
@@ -564,10 +662,20 @@ class OXOGame {
       gameState.winner = winner;
     }
     
-    // Firebaseに保存
+    console.log('保存するゲーム状態:', JSON.stringify(gameState));
+    
+    // Firebaseに保存（エラーハンドリング強化）
     window.db.ref(`games/${window.roomId}`).update(gameState)
       .then(() => {
         console.log('ゲーム状態を保存しました');
+        // クライアントの最終更新時刻を更新（サーバー時刻と同期するため）
+        this.lastUpdateTime = clientTime;
+        
+        // 確実に盤面データが保存されるよう、個別に保存
+        return window.db.ref(`games/${window.roomId}/board`).set(boardState);
+      })
+      .then(() => {
+        console.log('盤面データを個別に保存しました');
       })
       .catch(error => {
         console.error('ゲーム状態の保存エラー:', error);
@@ -580,10 +688,32 @@ class OXOGame {
   syncWithOnlineState(gameState) {
     if (!this.isOnlineMode) return;
     
-    // 変更がない場合は更新しない
-    if (gameState.lastUpdateTime && gameState.lastUpdateTime <= this.lastUpdateTime) {
+    // デバッグログを追加
+    console.log('同期開始:', gameState);
+    
+    // 基本的な入力チェック
+    if (!gameState || typeof gameState !== 'object') {
+      console.error('無効なゲーム状態データ:', gameState);
       return;
     }
+    
+    // lastUpdateTimeに基づく同期スキップを一時的に無効化（問題解決まで）
+    // 問題が解決したら以下のコメントを外す
+    /*
+    if (!gameState.lastUpdateTime) {
+      console.log('タイムスタンプなし、強制同期');
+    } else if (this.lastUpdateTime && gameState.lastUpdateTime <= this.lastUpdateTime) {
+      // 変更がない場合は更新しない
+      console.log('変更なし、同期スキップ', 
+        '現在:', this.lastUpdateTime, 
+        '受信:', gameState.lastUpdateTime);
+      return;
+    } else {
+      console.log('新しい更新を検出:', 
+        '現在:', this.lastUpdateTime, 
+        '受信:', gameState.lastUpdateTime);
+    }
+    */
     
     // 最終更新時刻を更新
     if (gameState.lastUpdateTime) {
@@ -591,8 +721,13 @@ class OXOGame {
     }
     
     // ゲーム状態を更新
-    this.gameState = gameState.gameState || GAME_CONSTANTS.GAME_STATES.WAITING;
-    this.isStarted = gameState.isStarted || false;
+    if (gameState.gameState) {
+      this.gameState = gameState.gameState;
+    }
+    
+    if (gameState.isStarted !== undefined) {
+      this.isStarted = gameState.isStarted;
+    }
     
     // ゲーム開始ボタンの表示/非表示
     const startContainer = document.getElementById('game-start-container');
@@ -610,39 +745,100 @@ class OXOGame {
     }
     
     // プレイヤーの手番を更新
-    this.currentPlayer = gameState.currentPlayer || 'black';
-    this.placedThisTurn = gameState.placedThisTurn || 0;
-    this.firstPlacement = gameState.firstPlacement || null;
+    if (gameState.currentPlayer) {
+      this.currentPlayer = gameState.currentPlayer;
+    }
+    
+    if (gameState.placedThisTurn !== undefined) {
+      this.placedThisTurn = gameState.placedThisTurn;
+    }
+    
+    if (gameState.firstPlacement !== undefined) {
+      this.firstPlacement = gameState.firstPlacement;
+    }
     
     // 盤面状態を更新
     if (gameState.board) {
-      // 盤面をクリア
-      this.cells.forEach(cell => {
-        cell.textContent = '';
-        cell.classList.remove('black-piece', 'white-piece');
-      });
-      
-      // 新しい状態を反映
-      gameState.board.forEach((piece, index) => {
-        if (piece) {
-          const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
-          const col = index % GAME_CONSTANTS.BOARD_SIZE;
-          const cell = this.getCell(row, col);
+      // boardが配列かどうか確認
+      const boardData = gameState.board;
+      if (!Array.isArray(boardData)) {
+        console.warn('boardデータが配列ではないため変換します:', boardData);
+        
+        // オブジェクト形式の場合は配列に変換
+        try {
+          // Firebaseの場合、{0: "black", 1: null, ...} のような形式かもしれない
+          const convertedBoard = [];
+          const keys = Object.keys(boardData).sort((a, b) => parseInt(a) - parseInt(b));
+          for (let i = 0; i < keys.length; i++) {
+            convertedBoard[i] = boardData[keys[i]];
+          }
           
-          cell.textContent = '●';
-          cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+          console.log('盤面データを変換しました:', convertedBoard);
+          
+          // 盤面をクリア
+          this.cells.forEach(cell => {
+            cell.textContent = '';
+            cell.classList.remove('black-piece', 'white-piece');
+          });
+          
+          // 変換したデータを使用
+          for (let i = 0; i < convertedBoard.length; i++) {
+            const piece = convertedBoard[i];
+            if (piece) {
+              const row = Math.floor(i / GAME_CONSTANTS.BOARD_SIZE);
+              const col = i % GAME_CONSTANTS.BOARD_SIZE;
+              const cell = this.getCell(row, col);
+              
+              if (cell) {
+                cell.textContent = '●';
+                cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+              } else {
+                console.error(`セルが見つかりません: row=${row}, col=${col}, index=${i}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('盤面データの変換に失敗しました:', error);
+          return;
         }
-      });
+      } else {
+        // 配列の場合は通常処理
+        // 盤面をクリア
+        this.cells.forEach(cell => {
+          cell.textContent = '';
+          cell.classList.remove('black-piece', 'white-piece');
+        });
+        
+        // 新しい状態を反映
+        boardData.forEach((piece, index) => {
+          if (piece) {
+            const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
+            const col = index % GAME_CONSTANTS.BOARD_SIZE;
+            const cell = this.getCell(row, col);
+            
+            if (cell) {
+              cell.textContent = '●';
+              cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+            } else {
+              console.error(`セルが見つかりません: row=${row}, col=${col}, index=${index}`);
+            }
+          }
+        });
+      }
       
       // ヒントを更新
       this.clearHints();
       if (this.placedThisTurn === 1 && this.firstPlacement) {
         this.showPlacementHints(this.firstPlacement.row, this.firstPlacement.col);
       }
+    } else {
+      console.warn('盤面データがありません');
     }
     
     // ステータス表示を更新
     this.updateStatus();
+    
+    console.log('同期完了:', this);
   }
 }
 

@@ -228,7 +228,11 @@ class FirebaseConnect {
   setupGameListener(roomId) {
     const gameRef = this.db.ref(`games/${roomId}`);
     
+    console.log(`ルーム ${roomId} のリスナーを設定しました`);
+    
+    // メインのゲーム状態リスナー
     gameRef.on('value', (snapshot) => {
+      console.log('ゲーム状態の更新を検出:', snapshot.val());
       const gameData = snapshot.val();
       if (gameData && window.game && typeof window.game.syncWithOnlineState === 'function') {
         // ゲーム状態を同期
@@ -239,6 +243,21 @@ class FirebaseConnect {
           this.handleRoomDisbanded();
         }
       }
+    });
+    
+    // 盤面専用のリスナー（パフォーマンス向上のため）
+    gameRef.child('board').on('value', (snapshot) => {
+      console.log('盤面データの更新を検出:', snapshot.val());
+      const boardData = snapshot.val();
+      if (boardData && window.game && typeof window.game.updateBoardOnly === 'function') {
+        // 盤面のみを更新（他の状態は変更しない）
+        window.game.updateBoardOnly(boardData);
+      }
+    });
+    
+    // エラーハンドリング
+    gameRef.on('error', (error) => {
+      console.error('Firebase リスナーエラー:', error);
     });
   }
   
