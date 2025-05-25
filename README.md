@@ -15,7 +15,7 @@
 ローカルテスト:
 
 ```
-firebase serve
+cd hosting && firebase serve
 ```
 
 デプロイ:
