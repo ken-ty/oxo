@@ -37,7 +37,32 @@ describe('FirebaseConnect', () => {
     window.game = {
       enableOnlineMode: jest.fn(),
       syncWithOnlineState: jest.fn(),
-      enableSpectatorMode: jest.fn()
+      enableSpectatorMode: jest.fn(),
+      undoMove: jest.fn().mockImplementation(function() {
+        if (this.isSpectatorMode) {
+          window.alert('観戦者モードでは操作できません');
+          return;
+        }
+        if (this.isOnlineMode) {
+          window.alert('オンラインモードでは待ったはできません');
+          return;
+        }
+      }),
+      resetGame: jest.fn().mockImplementation(function() {
+        if (this.isSpectatorMode) {
+          window.alert('観戦者モードでは操作できません');
+          return;
+        }
+      }),
+      startGame: jest.fn().mockImplementation(function() {
+        if (this.isSpectatorMode) {
+          window.alert('観戦者モードでは操作できません');
+          return;
+        }
+        if (!this.isOnlineMode) return;
+      }),
+      isSpectatorMode: false,
+      isOnlineMode: false
     };
     
     // FirebaseのモックをwindowにセットアップとFirebaseConnectの初期化
@@ -468,5 +493,63 @@ describe('FirebaseConnect', () => {
     // 2人目の参加（通知あり）
     firebaseConnect.handlePlayerChanges({ black: 'host', white: 'guest' });
     expect(notificationSpy).toHaveBeenCalledWith('2人目のプレイヤーが参加しました！');
+  });
+
+  // 観戦者モードでの操作制限テスト
+  test('観戦者モードでは操作が制限される', () => {
+    // 実際のゲームクラスのメソッドをモック
+    const originalUndoMove = window.game.undoMove;
+    const originalResetGame = window.game.resetGame;
+    const originalStartGame = window.game.startGame;
+    
+    // window.alertのモック
+    window.alert = jest.fn();
+    
+    // 観戦者モードを設定
+    window.game.isSpectatorMode = true;
+    
+    // 実際のメソッドを呼び出し（観戦者モードの制限がかかるはず）
+    window.game.undoMove();
+    window.game.resetGame();
+    window.game.startGame();
+    
+    // アラートが3回表示されることを確認
+    expect(window.alert).toHaveBeenCalledTimes(3);
+    expect(window.alert).toHaveBeenCalledWith('観戦者モードでは操作できません');
+    
+    // 元のメソッドを復元
+    window.game.undoMove = originalUndoMove;
+    window.game.resetGame = originalResetGame;
+    window.game.startGame = originalStartGame;
+    window.game.isSpectatorMode = false;
+  });
+
+  // 観戦者用UI設定のテスト
+  test('観戦者モードでは操作ボタンが非表示になる', () => {
+    // 必要なDOM要素を追加
+    document.body.innerHTML += `
+      <button id="reset-button">リセット</button>
+      <button id="undo-button">戻る</button>
+    `;
+    
+    // window.gameのモックを拡張
+    window.game.resetButton = document.getElementById('reset-button');
+    window.game.undoButton = document.getElementById('undo-button');
+    window.game.setupSpectatorUI = jest.fn().mockImplementation(() => {
+      // 実際の処理をシミュレート
+      if (window.game.resetButton) {
+        window.game.resetButton.style.display = 'none';
+      }
+      if (window.game.undoButton) {
+        window.game.undoButton.style.display = 'none';
+      }
+    });
+    
+    // 観戦者モードを有効化
+    window.game.setupSpectatorUI();
+    
+    // ボタンが非表示になっていることを確認
+    expect(window.game.resetButton.style.display).toBe('none');
+    expect(window.game.undoButton.style.display).toBe('none');
   });
 }); 

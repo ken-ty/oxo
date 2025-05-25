@@ -168,6 +168,12 @@ class OXOGame {
    * 一手戻る
    */
   undoMove() {
+    // 観戦者モードでは待ったできない
+    if (this.isSpectatorMode) {
+      alert('観戦者モードでは操作できません');
+      return;
+    }
+    
     // オンラインモードでは待ったできない
     if (this.isOnlineMode) {
       alert('オンラインモードでは待ったはできません');
@@ -469,6 +475,12 @@ class OXOGame {
    * ゲームをリセット
    */
   resetGame() {
+    // 観戦者モードではリセットできない
+    if (this.isSpectatorMode) {
+      alert('観戦者モードでは操作できません');
+      return;
+    }
+    
     // ゲーム状態をリセット
     this.initGameState();
     
@@ -531,6 +543,12 @@ class OXOGame {
    * ゲームを開始
    */
   startGame() {
+    // 観戦者モードではゲームを開始できない
+    if (this.isSpectatorMode) {
+      alert('観戦者モードでは操作できません');
+      return;
+    }
+    
     if (!this.isOnlineMode) return;
     
     // ルームの参照
@@ -618,6 +636,16 @@ class OXOGame {
       this.endGameButton.style.display = 'none';
     }
     
+    // リセットボタンを非表示（観戦者はリセットできない）
+    if (this.resetButton) {
+      this.resetButton.style.display = 'none';
+    }
+    
+    // 戻るボタンを非表示（観戦者は待ったできない）
+    if (this.undoButton) {
+      this.undoButton.style.display = 'none';
+    }
+    
     // 観戦者用の説明を表示
     this.showSpectatorInfo();
     
@@ -648,7 +676,8 @@ class OXOGame {
         👁️ 観戦中
       </div>
       <div class="spectator-message">
-        ゲームを観戦しています。コマを置くことはできません。
+        ゲームを観戦しています。<br>
+        コマを置く、ゲーム開始・終了、リセット、待ったなどの操作はできません。
       </div>
     `;
     spectatorInfo.style.display = 'block';

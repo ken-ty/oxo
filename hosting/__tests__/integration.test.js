@@ -36,28 +36,31 @@ jest.mock('../public/firebase-connect.js', () => {
     setupEventListeners() {
       // この関数はJestのモックが呼び出すので、DOMがない可能性があるため安全に実装
       const mockSetupListeners = () => {
-        const createRoomButton = document.getElementById('create-room-button');
-        if (createRoomButton) {
-          createRoomButton.addEventListener('click', () => this.createRoom());
-        }
-        
-        const joinRoomButton = document.getElementById('join-room-button');
-        const joinRoomInput = document.getElementById('join-room-input');
-        
-        if (joinRoomButton && joinRoomInput) {
-          joinRoomButton.addEventListener('click', () => {
-            this.joinRoom(joinRoomInput.value.trim());
-          });
-        }
-        
-        const endGameButton = document.getElementById('end-game-button');
-        if (endGameButton) {
-          endGameButton.addEventListener('click', () => this.disbandRoom());
+        // テスト環境でのみ実行
+        if (typeof global !== 'undefined' && global.document) {
+          const createRoomButton = global.document.getElementById('create-room-button');
+          if (createRoomButton) {
+            createRoomButton.addEventListener('click', () => this.createRoom());
+          }
+          
+          const joinRoomButton = global.document.getElementById('join-room-button');
+          const joinRoomInput = global.document.getElementById('join-room-input');
+          
+          if (joinRoomButton && joinRoomInput) {
+            joinRoomButton.addEventListener('click', () => {
+              this.joinRoom(joinRoomInput.value.trim());
+            });
+          }
+          
+          const endGameButton = global.document.getElementById('end-game-button');
+          if (endGameButton) {
+            endGameButton.addEventListener('click', () => this.disbandRoom());
+          }
         }
       };
       
       // テスト環境でDOMが準備できているときだけ実行
-      if (typeof document !== 'undefined') {
+      if (typeof global !== 'undefined' && global.document) {
         mockSetupListeners();
       }
     }
@@ -75,9 +78,12 @@ jest.mock('../public/firebase-connect.js', () => {
       // グローバル変数への代入を避ける
       this.roomId = roomId;
       
-      const roomIdDisplay = document.getElementById('room-id-display');
-      if (roomIdDisplay) {
-        roomIdDisplay.textContent = roomId;
+      // テスト環境でのみDOM操作を実行
+      if (typeof global !== 'undefined' && global.document) {
+        const roomIdDisplay = global.document.getElementById('room-id-display');
+        if (roomIdDisplay) {
+          roomIdDisplay.textContent = roomId;
+        }
       }
       
       this.createNewRoom();
@@ -94,8 +100,11 @@ jest.mock('../public/firebase-connect.js', () => {
         mockGame.enableOnlineMode();
       }
       
-      const startContainer = document.getElementById('game-start-container');
-      if (startContainer) startContainer.style.display = 'block';
+      // テスト環境でのみDOM操作を実行
+      if (typeof global !== 'undefined' && global.document) {
+        const startContainer = global.document.getElementById('game-start-container');
+        if (startContainer) startContainer.style.display = 'block';
+      }
     }
     
     joinExistingRoom(gameData) {
