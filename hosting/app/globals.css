@@ -235,6 +235,79 @@ body {
   font-weight: bold;
 }
 
+/* プレイヤー入室通知 */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 1000;
+  transform: translateX(100%);
+  transition: transform 0.3s ease-in-out;
+  max-width: 300px;
+  word-wrap: break-word;
+}
+
+.notification.show {
+  transform: translateX(0);
+}
+
+.notification::before {
+  content: "🎮";
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* 観戦者モード用スタイル */
+.spectator-info {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.spectator-badge {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spectator-message {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* 観戦者用のセルスタイル */
+.spectator-cell {
+  cursor: default !important;
+  opacity: 0.9;
+}
+
+.spectator-cell:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  transform: none !important;
+}
+
+/* 観戦者モード時のオンラインステータス */
+#online-status.spectator {
+  background-color: rgba(255, 152, 0, 0.2);
+  color: #FF9800;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
 /* オンラインステータス表示改善 */
 #online-status {
   font-size: 14px;
@@ -271,4 +344,29 @@ body {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 480px) {
+  .notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+    font-size: 13px;
+    padding: 12px 15px;
+  }
+  
+  .spectator-info {
+    margin-bottom: 15px;
+    padding: 12px;
+  }
+  
+  .spectator-badge {
+    font-size: 16px;
+  }
+  
+  .spectator-message {
+    font-size: 13px;
+  }
 } 

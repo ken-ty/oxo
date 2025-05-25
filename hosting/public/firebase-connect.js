@@ -24,13 +24,29 @@ const GAME_STATES = {
 // Firebaseクラス
 class FirebaseConnect {
   constructor() {
+    // Firebase設定の確認
+    if (typeof firebase === 'undefined') {
+      console.error('Firebaseが読み込まれていません');
+      return;
+    }
+
     // Firebase初期化
     firebase.initializeApp(firebaseConfig);
     this.db = firebase.database();
     window.db = this.db;
     
-    // DOMの準備ができてからイベントリスナーをセットアップ
-    this.setupEventListenersWhenReady();
+    // プレイヤー・観戦者監視用の初期化フラグ
+    this.hasInitialPlayerCheck = false;
+    this.hasInitialSpectatorCheck = false;
+    this.lastPlayerCount = 0;
+    this.lastSpectatorCount = 0;
+    
+    // DOM要素の準備ができたらイベントリスナーを設定
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.setupEventListenersWhenReady());
+    } else {
+      this.setupEventListenersWhenReady();
+    }
   }
   
   // DOMの準備を確認してイベントリスナーをセットアップ
@@ -196,38 +212,122 @@ class FirebaseConnect {
       return;
     }
     
+    // プレイヤー数をチェック
+    const playerCount = this.countActivePlayers(gameData.players);
+    console.log(`現在のプレイヤー数: ${playerCount}`);
+    
     // ゲームルームの参照
     const gameRef = this.db.ref(`games/${window.roomId}`);
     
-    // プレイヤーの役割を設定
-    window.playerRole = 'white'; // 参加者は白（ゲスト）
-    
-    // プレイヤー情報を更新
-    gameRef.child('players/white').set('guest')
-      .then(() => {
-        // ゲーム状態を更新
-        return gameRef.child('gameState').set(GAME_STATES.READY);
-      })
-      .then(() => {
-        console.log('ルームに参加しました');
-        
-        // オンラインモードを有効化
-        if (window.game && typeof window.game.enableOnlineMode === 'function') {
-          window.game.enableOnlineMode();
+    if (playerCount < 2) {
+      // 2人目のプレイヤーとして参加
+      window.playerRole = 'white'; // 参加者は白（ゲスト）
+      
+      // プレイヤー情報を更新
+      gameRef.child('players/white').set('guest')
+        .then(() => {
+          // ゲーム状態を更新
+          return gameRef.child('gameState').set(GAME_STATES.READY);
+        })
+        .then(() => {
+          console.log('ルームに参加しました');
+          this.showPlayerJoinNotification('プレイヤーが参加しました！ゲームを開始できます。');
           
-          // ゲーム状態をロード
-          if (typeof window.game.syncWithOnlineState === 'function') {
-            window.game.syncWithOnlineState(gameData);
+          // オンラインモードを有効化
+          if (window.game && typeof window.game.enableOnlineMode === 'function') {
+            window.game.enableOnlineMode();
+            
+            // ゲーム状態をロード
+            if (typeof window.game.syncWithOnlineState === 'function') {
+              window.game.syncWithOnlineState(gameData);
+            } else {
+              console.error('game.syncWithOnlineStateが見つかりません');
+            }
           } else {
-            console.error('game.syncWithOnlineStateが見つかりません');
+            console.error('game.enableOnlineModeが見つかりません');
           }
-        } else {
-          console.error('game.enableOnlineModeが見つかりません');
-        }
+        })
+        .catch(error => {
+          console.error('参加処理エラー:', error);
+        });
+    } else {
+      // 3人目以降は観戦者として参加
+      window.playerRole = 'spectator';
+      
+      // 観戦者リストに追加
+      const spectatorId = this.generateSpectatorId();
+      gameRef.child(`spectators/${spectatorId}`).set({
+        joinedAt: firebase.database.ServerValue.TIMESTAMP,
+        status: 'watching'
       })
-      .catch(error => {
-        console.error('参加処理エラー:', error);
-      });
+        .then(() => {
+          console.log('観戦者として参加しました');
+          this.showPlayerJoinNotification('観戦者として参加しました。ゲームを見ることができます。');
+          
+          // 観戦者モードを有効化
+          if (window.game && typeof window.game.enableSpectatorMode === 'function') {
+            window.game.enableSpectatorMode();
+            
+            // ゲーム状態をロード（観戦者用）
+            if (typeof window.game.syncWithOnlineState === 'function') {
+              window.game.syncWithOnlineState(gameData);
+            }
+          } else {
+            console.error('game.enableSpectatorModeが見つかりません');
+          }
+        })
+        .catch(error => {
+          console.error('観戦者参加処理エラー:', error);
+        });
+    }
+  }
+  
+  // アクティブなプレイヤー数をカウント
+  countActivePlayers(players) {
+    if (!players) return 0;
+    
+    let count = 0;
+    if (players.black && players.black !== null) count++;
+    if (players.white && players.white !== null) count++;
+    
+    return count;
+  }
+  
+  // 観戦者IDを生成
+  generateSpectatorId() {
+    return 'spectator_' + Math.random().toString(36).substr(2, 9);
+  }
+  
+  // プレイヤー入室通知を表示
+  showPlayerJoinNotification(message) {
+    // 通知要素を作成または取得
+    let notificationElement = document.getElementById('player-join-notification');
+    if (!notificationElement) {
+      notificationElement = document.createElement('div');
+      notificationElement.id = 'player-join-notification';
+      notificationElement.className = 'notification';
+      
+      // ゲームコンテナの上部に挿入
+      const gameContainer = document.querySelector('.game-container');
+      if (gameContainer) {
+        gameContainer.insertBefore(notificationElement, gameContainer.firstChild);
+      } else {
+        document.body.appendChild(notificationElement);
+      }
+    }
+
+    // 通知メッセージを表示
+    notificationElement.textContent = message;
+    notificationElement.style.display = 'block';
+    notificationElement.classList.add('show');
+
+    // 3秒後に非表示
+    setTimeout(() => {
+      notificationElement.classList.remove('show');
+      setTimeout(() => {
+        notificationElement.style.display = 'none';
+      }, 300);
+    }, 3000);
   }
   
   // ゲーム状態のリアルタイム更新をリッスン
@@ -251,6 +351,22 @@ class FirebaseConnect {
       }
     });
     
+    // プレイヤー参加の監視
+    gameRef.child('players').on('value', (snapshot) => {
+      const players = snapshot.val();
+      if (players) {
+        this.handlePlayerChanges(players);
+      }
+    });
+    
+    // 観戦者参加の監視
+    gameRef.child('spectators').on('value', (snapshot) => {
+      const spectators = snapshot.val();
+      if (spectators) {
+        this.handleSpectatorChanges(spectators);
+      }
+    });
+    
     // 盤面専用のリスナー（パフォーマンス向上のため）
     gameRef.child('board').on('value', (snapshot) => {
       console.log('盤面データの更新を検出:', snapshot.val());
@@ -265,6 +381,56 @@ class FirebaseConnect {
     gameRef.on('error', (error) => {
       console.error('Firebase リスナーエラー:', error);
     });
+  }
+  
+  // プレイヤーの変更を処理
+  handlePlayerChanges(players) {
+    const playerCount = this.countActivePlayers(players);
+    console.log(`プレイヤー数の変更を検出: ${playerCount}人`);
+    
+    // 初回の場合は通知しない
+    if (!this.hasInitialPlayerCheck) {
+      this.hasInitialPlayerCheck = true;
+      this.lastPlayerCount = playerCount;
+      return;
+    }
+    
+    // プレイヤー数が増えた場合のみ通知
+    if (playerCount > this.lastPlayerCount) {
+      if (playerCount === 1) {
+        this.showPlayerJoinNotification('ホストがルームを作成しました');
+      } else if (playerCount === 2) {
+        // 自分が参加者でない場合のみ通知（自分の参加は既に通知済み）
+        if (window.playerRole !== 'white') {
+          this.showPlayerJoinNotification('2人目のプレイヤーが参加しました！');
+        }
+      }
+    }
+    
+    this.lastPlayerCount = playerCount;
+  }
+
+  // 観戦者の変更を処理
+  handleSpectatorChanges(spectators) {
+    const spectatorCount = spectators ? Object.keys(spectators).length : 0;
+    console.log(`観戦者数の変更を検出: ${spectatorCount}人`);
+    
+    // 初回の場合は通知しない
+    if (!this.hasInitialSpectatorCheck) {
+      this.hasInitialSpectatorCheck = true;
+      this.lastSpectatorCount = spectatorCount;
+      return;
+    }
+    
+    // 観戦者数が増えた場合のみ通知
+    if (spectatorCount > this.lastSpectatorCount) {
+      // 自分が観戦者でない場合のみ通知（自分の参加は既に通知済み）
+      if (window.playerRole !== 'spectator') {
+        this.showPlayerJoinNotification(`観戦者が参加しました（${spectatorCount}人目）`);
+      }
+    }
+    
+    this.lastSpectatorCount = spectatorCount;
   }
   
   // ルームを解散する

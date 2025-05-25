@@ -59,6 +59,7 @@ class OXOGame {
     
     // オンラインモード用
     this.isOnlineMode = false;
+    this.isSpectatorMode = false;
     this.isStarted = false;
     this.gameState = GAME_CONSTANTS.GAME_STATES.WAITING;
     this.lastUpdateTime = 0;
@@ -251,6 +252,18 @@ class OXOGame {
       return;
     }
     
+    // 観戦者モードの場合
+    if (this.isSpectatorMode) {
+      if (!this.isStarted) {
+        this.statusElement.textContent = "ゲーム開始を待っています...";
+        this.statusElement.style.color = '#FF9800'; // オレンジ色
+      } else {
+        this.statusElement.textContent = `${playerText}の番です（観戦中）`;
+        this.statusElement.style.color = '#FF9800'; // オレンジ色
+      }
+      return;
+    }
+    
     if (this.isOnlineMode) {
       if (!this.isStarted) {
         this.statusElement.textContent = "ゲーム開始ボタンを押してください";
@@ -295,6 +308,12 @@ class OXOGame {
   shouldIgnoreClick(row, col) {
     // ゲーム終了時または既に石がある場合は無視
     if (this.gameOver || this.getCell(row, col).textContent) return true;
+    
+    // 観戦者モードの場合は常に無視
+    if (this.isSpectatorMode) {
+      console.log('観戦者モードのため、クリックを無視します');
+      return true;
+    }
     
     // オンラインモードの場合、自分の手番でなければ無視
     if (this.isOnlineMode && window.playerRole !== this.currentPlayer) {
@@ -563,6 +582,97 @@ class OXOGame {
   }
   
   /**
+   * 観戦者モードを有効化
+   */
+  enableSpectatorMode() {
+    this.isOnlineMode = true;
+    this.isSpectatorMode = true;
+    window.isOnlineMode = true;
+    window.isSpectatorMode = true;
+    
+    // オンラインステータスを更新
+    if (this.onlineStatusElement) {
+      this.onlineStatusElement.textContent = '観戦中';
+      this.onlineStatusElement.style.color = '#FF9800'; // オレンジ色
+    }
+    
+    // 観戦者用のUI設定
+    this.setupSpectatorUI();
+    
+    // ステータス表示を更新
+    this.updateStatus();
+  }
+  
+  /**
+   * 観戦者用のUI設定
+   */
+  setupSpectatorUI() {
+    // ゲーム開始ボタンを非表示
+    const startContainer = document.getElementById('game-start-container');
+    if (startContainer) {
+      startContainer.style.display = 'none';
+    }
+    
+    // 終了ボタンを非表示（観戦者はゲームを終了できない）
+    if (this.endGameButton) {
+      this.endGameButton.style.display = 'none';
+    }
+    
+    // 観戦者用の説明を表示
+    this.showSpectatorInfo();
+    
+    // セルクリックを無効化（観戦者はコマを置けない）
+    this.disableCellClicks();
+  }
+  
+  /**
+   * 観戦者用の情報を表示
+   */
+  showSpectatorInfo() {
+    // 観戦者情報要素を作成または取得
+    let spectatorInfo = document.getElementById('spectator-info');
+    if (!spectatorInfo) {
+      spectatorInfo = document.createElement('div');
+      spectatorInfo.id = 'spectator-info';
+      spectatorInfo.className = 'spectator-info';
+      
+      // ゲームコンテナの上部に挿入
+      const gameContainer = document.querySelector('.game-container');
+      if (gameContainer) {
+        gameContainer.insertBefore(spectatorInfo, gameContainer.firstChild);
+      }
+    }
+
+    spectatorInfo.innerHTML = `
+      <div class="spectator-badge">
+        👁️ 観戦中
+      </div>
+      <div class="spectator-message">
+        ゲームを観戦しています。コマを置くことはできません。
+      </div>
+    `;
+    spectatorInfo.style.display = 'block';
+  }
+  
+  /**
+   * セルクリックを無効化（観戦者用）
+   */
+  disableCellClicks() {
+    this.cells.forEach(cell => {
+      // 既存のイベントリスナーを削除
+      const newCell = cell.cloneNode(true);
+      cell.parentNode.replaceChild(newCell, cell);
+      
+      // 観戦者用のスタイルを追加
+      newCell.classList.add('spectator-cell');
+      newCell.style.cursor = 'default';
+    });
+    
+    // cellsの参照を更新
+    this.cells = Array.from(document.querySelectorAll('.cell'));
+  }
+  
+  /**
    * 盤面データのみを更新する（他の状態は変更しない）
    */
   updateBoardOnly(boardData) {
@@ -572,7 +682,7 @@ class OXOGame {
     
     try {
       // key-value形式の盤面データを処理
-      if (typeof boardData === 'object' && boardData !== null) {
+      if (typeof boardData === 'object' && boardData !== null && !Array.isArray(boardData)) {
         // 盤面をクリア
         this.cells.forEach(cell => {
           cell.textContent = '';
@@ -592,6 +702,36 @@ class OXOGame {
             if (cell) {
               cell.textContent = '●';
               cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+              console.log(`コマを配置: ${key} (${row},${col}), 色=${piece}`);
+            }
+          }
+        });
+        
+        console.log('盤面データの更新完了');
+      } else if (Array.isArray(boardData)) {
+        console.log('配列形式の盤面データを処理:', boardData);
+        
+        // 盤面をクリア
+        this.cells.forEach(cell => {
+          cell.textContent = '';
+          cell.classList.remove('black-piece', 'white-piece');
+        });
+        
+        // 配列形式からkey-value形式に変換
+        this.board = this.createEmptyBoard();
+        
+        // DOM要素に反映
+        boardData.forEach((piece, index) => {
+          if (piece && piece !== null && piece !== "") {
+            const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
+            const col = index % GAME_CONSTANTS.BOARD_SIZE;
+            const key = this.coordsToKey(row, col);
+            const cell = this.getCell(row, col);
+            
+            if (cell) {
+              cell.textContent = '●';
+              cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+              this.board[key] = piece;
               console.log(`コマを配置: ${key} (${row},${col}), 色=${piece}`);
             }
           }
@@ -759,6 +899,33 @@ class OXOGame {
               cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
             } else {
               console.error(`セルが見つかりません: ${key} (${row},${col})`);
+            }
+          }
+        });
+      } else if (Array.isArray(boardData)) {
+        console.log('配列形式の盤面データを処理:', boardData);
+        
+        // 盤面をクリア
+        this.cells.forEach(cell => {
+          cell.textContent = '';
+          cell.classList.remove('black-piece', 'white-piece');
+        });
+        
+        // 配列形式からkey-value形式に変換
+        this.board = this.createEmptyBoard();
+        
+        // DOM要素に反映
+        boardData.forEach((piece, index) => {
+          if (piece && piece !== null && piece !== "") {
+            const row = Math.floor(index / GAME_CONSTANTS.BOARD_SIZE);
+            const col = index % GAME_CONSTANTS.BOARD_SIZE;
+            const key = this.coordsToKey(row, col);
+            const cell = this.getCell(row, col);
+            
+            if (cell) {
+              cell.textContent = '●';
+              cell.classList.add(piece === 'black' ? 'black-piece' : 'white-piece');
+              this.board[key] = piece;
             }
           }
         });
