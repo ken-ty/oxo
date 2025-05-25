@@ -17,7 +17,8 @@ jest.mock('../public/firebase-connect.js', () => {
   // FirebaseConnectクラスのモック実装
   class MockFirebaseConnect {
     constructor() {
-      this.db = {
+      // windowへの直接参照をmock接頭辞付きの変数に変更
+      this.mockDb = {
         ref: jest.fn().mockReturnThis(),
         once: jest.fn().mockResolvedValue({
           exists: () => false,
@@ -29,29 +30,35 @@ jest.mock('../public/firebase-connect.js', () => {
         child: jest.fn().mockReturnThis()
       };
       
-      window.db = this.db;
       this.setupEventListeners();
     }
     
     setupEventListeners() {
-      // ボタンのイベントリスナーを設定
-      const createRoomButton = document.getElementById('create-room-button');
-      if (createRoomButton) {
-        createRoomButton.addEventListener('click', () => this.createRoom());
-      }
+      // この関数はJestのモックが呼び出すので、DOMがない可能性があるため安全に実装
+      const mockSetupListeners = () => {
+        const createRoomButton = document.getElementById('create-room-button');
+        if (createRoomButton) {
+          createRoomButton.addEventListener('click', () => this.createRoom());
+        }
+        
+        const joinRoomButton = document.getElementById('join-room-button');
+        const joinRoomInput = document.getElementById('join-room-input');
+        
+        if (joinRoomButton && joinRoomInput) {
+          joinRoomButton.addEventListener('click', () => {
+            this.joinRoom(joinRoomInput.value.trim());
+          });
+        }
+        
+        const endGameButton = document.getElementById('end-game-button');
+        if (endGameButton) {
+          endGameButton.addEventListener('click', () => this.disbandRoom());
+        }
+      };
       
-      const joinRoomButton = document.getElementById('join-room-button');
-      const joinRoomInput = document.getElementById('join-room-input');
-      
-      if (joinRoomButton && joinRoomInput) {
-        joinRoomButton.addEventListener('click', () => {
-          this.joinRoom(joinRoomInput.value.trim());
-        });
-      }
-      
-      const endGameButton = document.getElementById('end-game-button');
-      if (endGameButton) {
-        endGameButton.addEventListener('click', () => this.disbandRoom());
+      // テスト環境でDOMが準備できているときだけ実行
+      if (typeof document !== 'undefined') {
+        mockSetupListeners();
       }
     }
     
@@ -65,7 +72,8 @@ jest.mock('../public/firebase-connect.js', () => {
     }
     
     joinRoom(roomId) {
-      window.roomId = roomId;
+      // グローバル変数への代入を避ける
+      this.roomId = roomId;
       
       const roomIdDisplay = document.getElementById('room-id-display');
       if (roomIdDisplay) {
@@ -77,10 +85,13 @@ jest.mock('../public/firebase-connect.js', () => {
     }
     
     createNewRoom() {
-      window.playerRole = 'black';
+      // グローバル変数への代入を避ける
+      this.playerRole = 'black';
       
-      if (window.game && typeof window.game.enableOnlineMode === 'function') {
-        window.game.enableOnlineMode();
+      // windowへの参照を避ける
+      const mockGame = global.game;
+      if (mockGame && typeof mockGame.enableOnlineMode === 'function') {
+        mockGame.enableOnlineMode();
       }
       
       const startContainer = document.getElementById('game-start-container');
@@ -88,10 +99,13 @@ jest.mock('../public/firebase-connect.js', () => {
     }
     
     joinExistingRoom(gameData) {
-      window.playerRole = 'white';
+      // グローバル変数への代入を避ける
+      this.playerRole = 'white';
       
-      if (window.game && typeof window.game.enableOnlineMode === 'function') {
-        window.game.enableOnlineMode();
+      // windowへの参照を避ける
+      const mockGame = global.game;
+      if (mockGame && typeof mockGame.enableOnlineMode === 'function') {
+        mockGame.enableOnlineMode();
       }
     }
     
@@ -100,33 +114,36 @@ jest.mock('../public/firebase-connect.js', () => {
     }
     
     disbandRoom() {
-      if (window.confirm('ゲームを終了してルームを解散しますか？')) {
-        this.db.ref().update({
+      const mockConfirm = global.confirm;
+      const mockDb = this.mockDb;
+      
+      if (mockConfirm && mockConfirm('ゲームを終了してルームを解散しますか？')) {
+        mockDb.ref().update({
           gameState: 'finished',
           isRoomDisbanded: true,
           disbandedAt: Date.now()
         });
         
-        window.alert('ゲームを終了しました。トップページに戻ります。');
-        window.location.href = '/';
+        const mockAlert = global.alert;
+        if (mockAlert) mockAlert('ゲームを終了しました。トップページに戻ります。');
       }
     }
     
     handleRoomDisbanded() {
-      window.alert('相手プレイヤーによってゲームが終了しました。トップページに戻ります。');
-      window.location.href = '/';
+      const mockAlert = global.alert;
+      if (mockAlert) mockAlert('相手プレイヤーによってゲームが終了しました。トップページに戻ります。');
     }
   }
   
-  // モックインスタンスを作成して公開
-  window.firebaseConnect = new MockFirebaseConnect();
-  
   // モジュールエクスポート
-  return {};
+  return {
+    MockFirebaseConnect
+  };
 }, { virtual: true });
 
 describe('OXOゲーム 結合テスト', () => {
   let game;
+  let mockFirebaseConnect;
   
   // 各テスト前の準備
   beforeEach(() => {
@@ -147,8 +164,8 @@ describe('OXOゲーム 結合テスト', () => {
       <div id="game-start-container" style="display: none;"></div>
     `;
     
-    // Firebaseのモックをwindowにセットアップ
-    window.firebase = {
+    // グローバル変数の設定
+    global.firebase = {
       database: {
         ServerValue: {
           TIMESTAMP: Date.now()
@@ -156,8 +173,8 @@ describe('OXOゲーム 結合テスト', () => {
       }
     };
     
-    // window.dbをモック
-    window.db = {
+    // モックデータベース参照
+    global.db = {
       ref: jest.fn().mockReturnValue({
         update: jest.fn().mockResolvedValue({}),
         child: jest.fn().mockReturnValue({
@@ -167,19 +184,20 @@ describe('OXOゲーム 結合テスト', () => {
     };
     
     // ウィンドウ関数のモック
-    window.alert = jest.fn();
-    window.confirm = jest.fn().mockImplementation(() => true);
-    window.location = { href: 'http://localhost:3000' };
+    global.alert = jest.fn();
+    global.confirm = jest.fn().mockImplementation(() => true);
     
-    // FirebaseConnectモジュールをロード（モック版）
-    require('../public/firebase-connect.js');
+    // FirebaseConnectモックのインスタンスを作成
+    const { MockFirebaseConnect } = require('../public/firebase-connect.js');
+    mockFirebaseConnect = new MockFirebaseConnect();
+    global.firebaseConnect = mockFirebaseConnect;
     
     // ゲームモジュールを読み込み
     jest.resetModules();
     require('../public/game.js');
     
     // ゲームインスタンスへの参照を取得
-    game = window.game;
+    game = global.game;
   });
   
   // テスト後のクリーンアップ
@@ -195,7 +213,7 @@ describe('OXOゲーム 結合テスト', () => {
     createRoomButton.click();
     
     // roomIdがセットされ、ディスプレイに表示されることを確認
-    expect(window.roomId).toBe('test-room-id');
+    expect(global.roomId).toBe('test-room-id');
     
     // オンラインモードが有効化されていることを確認
     expect(game.isOnlineMode).toBe(true);
@@ -213,14 +231,14 @@ describe('OXOゲーム 結合テスト', () => {
     expect(game.gameState).toBe('playing');
     
     // Firebaseへの状態更新が呼ばれたことを確認
-    expect(window.db.ref).toHaveBeenCalledWith(expect.stringContaining('games/'));
+    expect(global.db.ref).toHaveBeenCalledWith(expect.stringContaining('games/'));
   });
   
   // オンラインモードでの対局をシミュレート
   test('オンラインモードで対局シミュレーション', async () => {
     // ルーム作成と参加（モック）
-    window.roomId = 'test-room-id';
-    window.playerRole = 'black';
+    global.roomId = 'test-room-id';
+    global.playerRole = 'black';
     game.enableOnlineMode();
     game.isStarted = true;
     game.gameState = 'playing';
@@ -229,7 +247,7 @@ describe('OXOゲーム 結合テスト', () => {
     game.handleCellClick(1, 1);
     
     // Firebaseへの状態保存が呼ばれたことを確認
-    expect(window.db.ref).toHaveBeenCalledWith(expect.stringContaining('games/test-room-id'));
+    expect(global.db.ref).toHaveBeenCalledWith(expect.stringContaining('games/test-room-id'));
     
     // 2つ目のコマを配置（ヒントがある位置に）
     let hintCell = null;
@@ -253,8 +271,8 @@ describe('OXOゲーム 結合テスト', () => {
   // オンラインモードでの勝利条件チェック
   test('オンラインモードでの勝利', async () => {
     // ルーム作成と参加（モック）
-    window.roomId = 'test-room-id';
-    window.playerRole = 'black';
+    global.roomId = 'test-room-id';
+    global.playerRole = 'black';
     game.enableOnlineMode();
     game.isStarted = true;
     game.gameState = 'playing';

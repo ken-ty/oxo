@@ -40,25 +40,28 @@ describe('FirebaseConnect', () => {
     };
     
     // FirebaseのモックをwindowにセットアップとFirebaseConnectの初期化
+    // Firebase モックを修正: database を関数として定義
+    const mockRef = {
+      once: jest.fn().mockImplementation(() => Promise.resolve({
+        exists: () => false,
+        val: () => null
+      })),
+      on: jest.fn(),
+      set: jest.fn().mockResolvedValue({}),
+      update: jest.fn().mockResolvedValue({}),
+      child: jest.fn().mockReturnThis()
+    };
+    
     window.firebase = {
       initializeApp: jest.fn(),
       database: jest.fn().mockReturnValue({
-        ref: jest.fn().mockReturnValue({
-          once: jest.fn().mockImplementation(() => Promise.resolve({
-            exists: () => false,
-            val: () => null
-          })),
-          on: jest.fn(),
-          set: jest.fn().mockResolvedValue({}),
-          update: jest.fn().mockResolvedValue({}),
-          child: jest.fn().mockReturnThis()
-        })
-      }),
-      database: {
-        ServerValue: {
-          TIMESTAMP: Date.now()
-        }
-      }
+        ref: jest.fn().mockReturnValue(mockRef)
+      })
+    };
+    
+    // ServerValue は database の中ではなく独立したプロパティとして定義
+    window.firebase.database.ServerValue = {
+      TIMESTAMP: Date.now()
     };
     
     // firebase-connect.jsの読み込みと実行
