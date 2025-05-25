@@ -44,15 +44,10 @@ createRoomButton.addEventListener('click', () => {
     winner: null,
     players: {
       black: 'host'
-    },
-    center: {
-      row: 3,
-      col: 3,
-      piece: 'white'
     }
   };
   
-  // 中央のコマを設定
+  // D-4の位置にコマを設定（3行目4列目 = 3*7+3 = 24）
   initialState.board[3 * 7 + 3] = 'white';
   
   db.ref(`games/${roomId}`).set(initialState)

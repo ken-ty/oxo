@@ -139,7 +139,7 @@ class FirebaseConnect {
   // 新しいルームを作成
   createNewRoom(gameRef) {
     const initialBoard = Array(49).fill(null);
-    initialBoard[24] = 'white'; // 中央に白を配置
+    initialBoard[24] = 'white'; // D-4の位置に白を配置（3行目4列目 = 3*7+3 = 24）
     
     gameRef.set({
       board: initialBoard,
@@ -151,11 +151,6 @@ class FirebaseConnect {
       },
       gameState: GAME_STATES.WAITING, // ゲーム状態を追加
       isStarted: false, // ゲーム開始状態
-      center: {
-        row: 3,
-        col: 3,
-        piece: 'white'
-      },
       createdAt: firebase.database.ServerValue.TIMESTAMP // 作成時刻を記録
     }).then(() => {
       console.log('ルームを作成しました');

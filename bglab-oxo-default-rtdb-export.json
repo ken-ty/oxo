@@ -1,22 +1,31 @@
 {
   "games": {
-    "ujq6hr": {
+    "21oej9": {
       "board": {
-        "24": "white"
+        "0": "white",
+        "1": "black",
+        "18": "black"
       },
       "center": {
         "col": 3,
         "piece": "white",
         "row": 3
       },
-      "currentPlayer": "black",
+      "clientUpdateTime": 1748139070661,
+      "createdAt": 1748139058226,
+      "currentPlayer": "white",
       "gameOver": false,
+      "gameState": "playing",
+      "isStarted": true,
+      "lastUpdateTime": 1748139070766,
+      "placedThisTurn": 0,
       "players": {
         "black": "host",
         "white": "guest"
-      }
+      },
+      "startedAt": 1748139066795
     },
-    "z1kfth": {
+    "eo87ni": {
       "board": {
         "24": "white"
       },
@@ -25,8 +34,11 @@
         "piece": "white",
         "row": 3
       },
+      "createdAt": 1748139010546,
       "currentPlayer": "black",
       "gameOver": false,
+      "gameState": "ready",
+      "isStarted": false,
       "players": {
         "black": "host",
         "white": "guest"

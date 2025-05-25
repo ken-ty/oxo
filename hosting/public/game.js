@@ -478,10 +478,11 @@ class OXOGame {
    * 初期状態を設定
    */
   setupInitialState() {
-    // 中央に白を配置
-    const centerCell = this.getCell(GAME_CONSTANTS.CENTER, GAME_CONSTANTS.CENTER);
-    centerCell.textContent = "●";
-    centerCell.classList.add("white-piece");
+    // D-4の位置に白を配置（行は上から数えて3、列は左から数えて3）
+    // ABCDEFGと1234567の表記では、D-4は盤面上の(3, 3)の位置に対応
+    const whiteCell = this.getCell(3, 3);
+    whiteCell.textContent = "●";
+    whiteCell.classList.add("white-piece");
   }
   
   // === オンラインモード関連メソッド ===
@@ -649,12 +650,7 @@ class OXOGame {
       placedThisTurn: this.placedThisTurn,
       firstPlacement: this.firstPlacement,
       lastUpdateTime: firebase.database.ServerValue.TIMESTAMP,
-      clientUpdateTime: clientTime,
-      center: {
-        row: GAME_CONSTANTS.CENTER,
-        col: GAME_CONSTANTS.CENTER,
-        piece: 'white'
-      }
+      clientUpdateTime: clientTime
     };
     
     // 勝者情報を追加（勝利時）
