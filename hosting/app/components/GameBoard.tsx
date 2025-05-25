@@ -41,6 +41,39 @@ export default function GameBoard() {
         console.log('Firebase connect script loaded successfully!');
         loadScript('/game.js', () => {
           console.log('Game script loaded successfully!');
+          
+          // ゲーム制御ボタンの表示制御
+          const controlButtonsVisibility = () => {
+            const gameControls = document.querySelector('.game-controls') as HTMLElement;
+            const onlineStatus = document.getElementById('online-status');
+            const endGameButton = document.getElementById('end-game-button');
+            
+            if (onlineStatus && gameControls && endGameButton) {
+              // オンライン対戦中かどうかの判定（「ゲーム終了」ボタンが表示されている場合はオンライン対戦中）
+              if (endGameButton.style.display !== 'none') {
+                gameControls.style.display = 'none'; // オンライン対戦中は非表示
+              } else {
+                gameControls.style.display = 'flex'; // オフラインなら表示
+              }
+            }
+          };
+          
+          // 初期設定
+          controlButtonsVisibility();
+          
+          // ゲーム開始/終了時に表示を切り替える
+          const endGameBtn = document.getElementById('end-game-button');
+          if (endGameBtn) {
+            // MutationObserverでゲーム終了ボタンの表示状態変化を監視
+            const observer = new MutationObserver((mutations) => {
+              controlButtonsVisibility();
+            });
+            
+            observer.observe(endGameBtn, { 
+              attributes: true, 
+              attributeFilter: ['style'] 
+            });
+          }
         });
       });
     }, 1000);
