@@ -14,15 +14,37 @@ https://bglab-oxo.web.app/
 - CSS
 - Firebase Realtime Database (対戦機能)
 
-ローカルテスト:
+### ローカル開発
+
+依存をインストールします（Node は `.tool-versions` のバージョンを利用）。
 
 ```
+cd hosting && npm install
+```
+
+ローカルでは本番DBを汚さないよう、`localhost` アクセス時は自動で Realtime Database emulator に接続します。対戦機能を試すには emulator とアプリの**両方**を起動してください（別々のターミナルで）。
+
+```
+# ターミナル1: emulator（127.0.0.1:9000 / UI は http://127.0.0.1:4000）
+cd hosting && npm run emulators
+
+# ターミナル2: アプリ（http://localhost:3000）
 cd hosting && npm run dev
 ```
 
-デプロイ:
+ブラウザのコンソールに `[OXO] Realtime Database emulator に接続しました` が出れば emulator に繋がっています。emulator を起動せずに `npm run dev` すると、対戦機能は接続先が無くエラーになります。
 
-main にマージすると自動でデプロイされます。
+> 接続先まとめ: `localhost`（`npm run dev`）→ ローカル emulator / 本番（bglab-oxo.web.app）→ 本番 RTDB
+
+### デプロイ
+
+main にマージすると Hosting が自動でデプロイされます。
+
+Realtime Database のセキュリティルール（[database.rules.json](database.rules.json)）は自動デプロイに含まれないため、変更時は手動で反映してください。
+
+```
+npx firebase deploy --only database
+```
 
 ## ルール
 

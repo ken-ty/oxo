@@ -30,10 +30,26 @@ class FirebaseConnect {
       return;
     }
 
-    // Firebase初期化
-    firebase.initializeApp(firebaseConfig);
+    // Firebase初期化（既に初期化済みなら再利用）
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     this.db = firebase.database();
     window.db = this.db;
+
+    // ローカル開発時のみ Realtime Database emulator に接続（本番DBを汚さない）
+    if (
+      (location.hostname === 'localhost' || location.hostname === '127.0.0.1') &&
+      !window.__OXO_DB_EMULATOR__
+    ) {
+      try {
+        this.db.useEmulator('127.0.0.1', 9000);
+        window.__OXO_DB_EMULATOR__ = true;
+        console.log('[OXO] Realtime Database emulator に接続しました (127.0.0.1:9000)');
+      } catch (e) {
+        console.warn('[OXO] emulator 接続に失敗しました:', e);
+      }
+    }
     
     // プレイヤー・観戦者監視用の初期化フラグ
     this.hasInitialPlayerCheck = false;
