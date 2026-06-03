@@ -4,6 +4,8 @@
 
 https://bglab-oxo.web.app/
 
+![screenshot](docs/assets/oxo-screens.png)
+
 
 ## 開発
 
