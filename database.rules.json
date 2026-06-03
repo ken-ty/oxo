@@ -1,6 +1,21 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    ".read": false,
+    ".write": false,
+    "games": {
+      "$roomId": {
+        ".read": true,
+        ".write": true,
+        ".validate": "$roomId.length >= 4 && $roomId.length <= 64",
+        "board": {
+          "$cell": {
+            ".validate": "newData.val() === '' || newData.val() === 'black' || newData.val() === 'white'"
+          }
+        },
+        "currentPlayer": {
+          ".validate": "newData.val() === 'black' || newData.val() === 'white'"
+        }
+      }
+    }
   }
 }
