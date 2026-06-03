@@ -2,18 +2,11 @@
  * OXO Game Logic
  */
 
-// 定数定義
-const GAME_CONSTANTS = {
-  BOARD_SIZE: 7,
-  CENTER: 3,
-  AXES: ['vertical', 'horizontal', 'diag1', 'diag2'],
-  GAME_STATES: {
-    WAITING: 'waiting',   // ルーム作成、相手待ち
-    READY: 'ready',       // 両プレイヤー参加、開始待ち
-    PLAYING: 'playing',   // ゲーム進行中
-    FINISHED: 'finished'  // ゲーム終了
-  }
-};
+// 純粋ロジック（oxo-logic.js）。ブラウザでは window.OXOLogic として先に読み込まれる。
+const OXO = (typeof OXOLogic !== 'undefined') ? OXOLogic : require('./oxo-logic.js');
+
+// 定数定義（純粋ロジック側を唯一の真実として参照）
+const GAME_CONSTANTS = OXO.GAME_CONSTANTS;
 
 /**
  * OXOゲームクラス
@@ -232,17 +225,7 @@ class OXOGame {
    * 対称点を計算
    */
   getSymPoint(row, col, axis) {
-    const c = GAME_CONSTANTS.CENTER;
-    const dx = row - c;
-    const dy = col - c;
-    
-    switch (axis) {
-      case 'vertical': return [row, c - dy];
-      case 'horizontal': return [c - dx, col];
-      case 'diag1': return [c - dy, c - dx];
-      case 'diag2': return [c + dy, c + dx];
-      default: return [row, col];
-    }
+    return OXO.getSymPoint(row, col, axis);
   }
   
   /**
@@ -362,17 +345,8 @@ class OXOGame {
    */
   showPlacementHints(row, col) {
     this.clearHints();
-    const shown = new Set();
-    
-    for (const axis of GAME_CONSTANTS.AXES) {
-      const [r, c] = this.getSymPoint(row, col, axis);
-      if (this.isValidPosition(r, c) && !(r === row && c === col)) {
-        const key = `${r},${c}`;
-        if (!shown.has(key)) {
-          shown.add(key);
-          this.showHint(r, c);
-        }
-      }
+    for (const { row: r, col: c } of OXO.getPlacementHints(row, col)) {
+      this.showHint(r, c);
     }
   }
   
@@ -380,8 +354,7 @@ class OXOGame {
    * 有効な位置かどうかを判定
    */
   isValidPosition(row, col) {
-    return row >= 0 && row < GAME_CONSTANTS.BOARD_SIZE && 
-           col >= 0 && col < GAME_CONSTANTS.BOARD_SIZE;
+    return OXO.isValidPosition(row, col);
   }
   
   /**
@@ -436,39 +409,7 @@ class OXOGame {
    * 勝利条件をチェック
    */
   checkVictory(playerColor) {
-    // key-valueベースでの勝利判定
-    const get = (row, col) => {
-      const key = this.coordsToKey(row, col);
-      return this.board[key] === playerColor;
-    };
-    
-    // 全てのセルをチェック
-    for (let r = 0; r < GAME_CONSTANTS.BOARD_SIZE; r++) {
-      for (let c = 0; c < GAME_CONSTANTS.BOARD_SIZE; c++) {
-        // 2x2の正方形チェック
-        if (r < GAME_CONSTANTS.BOARD_SIZE - 1 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
-          if (get(r, c) && get(r, c+1) && get(r+1, c) && get(r+1, c+1)) {
-            return true;
-          }
-        }
-        
-        // 十字形チェック - 縦横
-        if (r > 0 && r < GAME_CONSTANTS.BOARD_SIZE - 1 && c > 0 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
-          if (get(r, c) && get(r-1, c) && get(r+1, c) && get(r, c-1) && get(r, c+1)) {
-            return true;
-          }
-        }
-        
-        // 十字形チェック - 斜め
-        if (r > 0 && r < GAME_CONSTANTS.BOARD_SIZE - 1 && c > 0 && c < GAME_CONSTANTS.BOARD_SIZE - 1) {
-          if (get(r, c) && get(r-1, c-1) && get(r-1, c+1) && get(r+1, c-1) && get(r+1, c+1)) {
-            return true;
-          }
-        }
-      }
-    }
-    
-    return false;
+    return OXO.checkVictory(this.board, playerColor);
   }
   
   /**
@@ -983,32 +924,21 @@ class OXOGame {
    * 行列座標をkey（a1-g7）に変換
    */
   coordsToKey(row, col) {
-    const colLabel = String.fromCharCode(97 + col); // a-g
-    const rowLabel = GAME_CONSTANTS.BOARD_SIZE - row; // 1-7
-    return `${colLabel}${rowLabel}`;
+    return OXO.coordsToKey(row, col);
   }
-  
+
   /**
    * key（a1-g7）を行列座標に変換
    */
   keyToCoords(key) {
-    const col = key.charCodeAt(0) - 97; // a-g -> 0-6
-    const row = GAME_CONSTANTS.BOARD_SIZE - parseInt(key[1]); // 1-7 -> 6-0
-    return { row, col };
+    return OXO.keyToCoords(key);
   }
-  
+
   /**
    * 空の盤面を作成
    */
   createEmptyBoard() {
-    const board = {};
-    for (let row = 0; row < GAME_CONSTANTS.BOARD_SIZE; row++) {
-      for (let col = 0; col < GAME_CONSTANTS.BOARD_SIZE; col++) {
-        const key = this.coordsToKey(row, col);
-        board[key] = "";
-      }
-    }
-    return board;
+    return OXO.createEmptyBoard();
   }
 }
 

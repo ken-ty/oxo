@@ -39,6 +39,8 @@ export default function GameBoard() {
       // Firebase接続スクリプト読み込み後にゲームスクリプトを読み込む
       const firebaseScript = loadScript('/firebase-connect.js', () => {
         console.log('Firebase connect script loaded successfully!');
+        // 純粋ロジック（oxo-logic.js）を game.js より先に読み込む
+        loadScript('/oxo-logic.js', () => {
         loadScript('/game.js', () => {
           console.log('Game script loaded successfully!');
           
@@ -75,13 +77,15 @@ export default function GameBoard() {
             });
           }
         });
+        });
       });
     }, 1000);
-    
+
     // クリーンアップ関数
     return () => {
       clearTimeout(timeout);
       removeScript('/firebase-connect.js');
+      removeScript('/oxo-logic.js');
       removeScript('/game.js');
     };
   }, [loadScript, removeScript]);
