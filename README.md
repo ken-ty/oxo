@@ -9,10 +9,17 @@ https://bglab-oxo.web.app/
 
 技術:
 
-- JavaScript
-- HTML
-- CSS
-- Firebase Realtime Database (対戦機能)
+- フレームワーク: Next.js (App Router / `output: "export"` で静的HTMLに書き出し) + React + TypeScript
+- ゲームの実装: バニラ JavaScript（`hosting/public/*.js`）+ CSS
+- Firebase Realtime Database (対戦機能) / Firebase Hosting
+- Jest + Testing Library (テスト)
+- GitHub Actions (PR プレビュー・main マージで自動デプロイ)
+
+### 構成
+
+Next.js/React はゲームを描画する薄いシェルで、対戦・盤面ロジックは `hosting/public/` の素の JavaScript が担います。
+シェル（[GameBoard.tsx](hosting/app/components/GameBoard.tsx)）がこれらを `<script>` として動的に読み込みます。
+
 
 ### ローカル開発
 
@@ -32,9 +39,7 @@ cd hosting && npm run emulators
 cd hosting && npm run dev
 ```
 
-ブラウザのコンソールに `[OXO] Realtime Database emulator に接続しました` が出れば emulator に繋がっています。emulator を起動せずに `npm run dev` すると、対戦機能は接続先が無くエラーになります。
-
-> 接続先まとめ: `localhost`（`npm run dev`）→ ローカル emulator / 本番（bglab-oxo.web.app）→ 本番 RTDB
+ブラウザのコンソールに `[OXO] Realtime Database emulator に接続しました (127.0.0.1:9000)` が出れば emulator に繋がっています。emulator を起動せずに `npm run dev` すると、対戦機能は接続先が無くエラーになります。
 
 ### デプロイ
 
