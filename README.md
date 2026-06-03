@@ -60,3 +60,9 @@ npx firebase deploy --only database
 ```
 cd hosting && npm run test
 ```
+
+## ライセンス
+
+ソースコードは [MIT License](LICENSE) の下で公開しています。
+
+なお、MIT ライセンスが適用されるのは**このリポジトリのソースコードのみ**です。ゲーム「oxo」のデザインおよびルールは 上田悠 氏の作品です（ゲームのルール・仕組み自体は著作権の保護対象外）。
