@@ -2,7 +2,9 @@
 
 上田悠 の 作品。アブストラクトゲーム。
 
-https://bglab-oxo.web.app/
+> [!IMPORTANT]
+> 公開を終了した（2026-09-28）。Firebase プロジェクト `bglab-oxo` は削除済みで、以前の URL `bglab-oxo.web.app` はもう開けない。リポジトリはアーカイブしてある。
+> 再開する場合は新しい Firebase プロジェクトが要る。手順は [docs/restart.md](docs/restart.md)。
 
 ![screenshot](docs/assets/oxo-screens.png)
 
